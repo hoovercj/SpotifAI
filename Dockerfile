@@ -4,10 +4,10 @@ FROM node:22-alpine AS build
 WORKDIR /app
 ENV NODE_ENV=production
 COPY package*.json ./
-# Install ALL deps (incl. dev) for the webpack client bundle, then build
+# Install ALL deps (incl. dev) so Vite + Tailwind are available for the build
 RUN npm install --include=dev --no-audit --no-fund
 COPY . .
-RUN npm run build:prod
+RUN npm run build
 
 FROM node:22-alpine AS runtime
 WORKDIR /app

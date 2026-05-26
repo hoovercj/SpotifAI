@@ -1,0 +1,114 @@
+@import "tailwindcss";
+
+/* Enable dark mode via a `.dark` class on the <html> element */
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * SpotifAI design tokens — shadcn-compatible CSS variables.
+ * Light/dark are both defined; we default to dark via <html class="dark">.
+ * Accent is violet → fuchsia gradient (differentiates from Spotify green).
+ */
+:root {
+  --radius: 0.625rem;
+
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.55 0.245 296); /* violet-500 */
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.7 0.27 330); /* fuchsia-ish */
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --destructive-foreground: oklch(0.985 0 0);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.55 0.245 296);
+
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+}
+
+.dark {
+  --background: oklch(0.13 0.005 285); /* near zinc-950 */
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.17 0.005 285); /* zinc-900-ish */
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.17 0.005 285);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.65 0.25 296); /* violet-400 lifted for dark */
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.24 0.006 285);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.22 0.006 285);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.72 0.27 330); /* fuchsia-400-ish */
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.65 0.22 25);
+  --destructive-foreground: oklch(0.985 0 0);
+  --border: oklch(0.27 0.006 285);
+  --input: oklch(0.24 0.006 285);
+  --ring: oklch(0.65 0.25 296);
+
+  --sidebar: oklch(0.13 0.005 285);
+  --sidebar-foreground: oklch(0.985 0 0);
+}
+
+/* Map our CSS variables into Tailwind v4's color theme so utilities like
+ * `bg-background`, `text-foreground`, `border-border`, etc. resolve correctly. */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  --font-sans:
+    ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+}
+
+/* Body / html baseline — kept minimal so legacy Bootstrap-styled views still
+ * render during Phase 0/1; tightened up in later phases. */
+html,
+body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  min-height: 100%;
+}

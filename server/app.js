@@ -21,7 +21,16 @@ app.use(express.urlencoded({ extended: false }));
 const sessionFlag = require("./services/utl/globalVariableModule");
 sessionFlag.set(true);
 
-app.use(express.static(path.join(__dirname, "..", "public")));
+// Static asset serving:
+// - In production, Vite builds the client to dist/ and Express serves it directly.
+// - In development, Vite runs its own dev server on :3000 and proxies /api to
+//   this Express instance on :3001, so the static middleware below is unused.
+// We still mount public/ so runtime assets (favicon, generated audio, etc.)
+// remain reachable in both environments.
+const distDir = path.join(__dirname, "..", "dist");
+const publicDir = path.join(__dirname, "..", "public");
+app.use(express.static(distDir));
+app.use(express.static(publicDir));
 
 app.use(
   session({
@@ -40,9 +49,16 @@ app.use(
   })
 );
 
-app.get("/", (req, res) => res.sendFile("index.html"));
-
 app.use("/api", require("./routes"));
+
+// SPA fallback (prod only) — any non-API request that wasn't matched by static
+// middleware gets the built index.html so React Router can take over.
+app.get(/^\/(?!api\/).*/, (req, res, next) => {
+  const indexPath = path.join(distDir, "index.html");
+  res.sendFile(indexPath, (err) => {
+    if (err) next();
+  });
+});
 
 app.use((err, req, res, next) => {
   console.error(err.stack);
