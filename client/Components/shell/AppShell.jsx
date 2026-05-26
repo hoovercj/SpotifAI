@@ -3,6 +3,7 @@ import { Outlet } from "react-router-dom"
 import { Sparkles } from "lucide-react"
 import BottomTabBar from "./BottomTabBar"
 import AccountMenu from "./AccountMenu"
+import NowPlayingBar from "../player/NowPlayingBar"
 
 /**
  * AppShell is the mobile-only layout that wraps the three authenticated tabs.
@@ -33,6 +34,10 @@ export default function AppShell() {
         <main className="flex-1 overflow-y-auto pb-[calc(var(--player-offset,0px)+72px+env(safe-area-inset-bottom))]">
           <Outlet />
         </main>
+
+        <div className="sticky bottom-[calc(56px+env(safe-area-inset-bottom))] z-20">
+          <NowPlayingBar />
+        </div>
 
         <BottomTabBar />
       </div>

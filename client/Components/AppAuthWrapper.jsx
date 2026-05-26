@@ -7,6 +7,8 @@ import AppShell from "./shell/AppShell"
 import HomeTab from "./tabs/HomeTab"
 import SearchTab from "./tabs/SearchTab"
 import LibraryTab from "./tabs/LibraryTab"
+import { PlayerProvider } from "./player/PlayerProvider"
+import NowPlayingScreen from "./player/NowPlayingScreen"
 import { fetchDjs } from "../store/djsSlice"
 import { fetchUserStations } from "../store/stationsSlice"
 
@@ -36,8 +38,9 @@ export default function AppAuthWrapper({ code }) {
   }, [accessToken, dispatch])
 
   return (
-    <>
+    <PlayerProvider>
       <UserProfile />
+      <NowPlayingScreen />
       <Routes>
         <Route element={<AppShell />}>
           <Route index element={<Navigate to="/home" replace />} />
@@ -49,6 +52,6 @@ export default function AppAuthWrapper({ code }) {
           <Route path="*" element={<Navigate to="/home" replace />} />
         </Route>
       </Routes>
-    </>
+    </PlayerProvider>
   )
 }
