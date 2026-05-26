@@ -1,0 +1,101 @@
+@media (max-width: 336px) {
+  .title2 {
+    color: white;
+    font-size: 20px;
+    font-weight: bold;
+    text-align: center;
+  }
+
+  .mySwiper2 {
+    display: flex;
+    height: 400px;
+  }
+
+  .myswiper2 .swiper-coverflow {
+    justify-content: center;
+  }
+
+  /* Make all slides slightly transparent */
+  .mySwiper2 .swiper-slide {
+    opacity: 0.6;
+    transition: transform 0.8s, opacity 0.8s;
+    transition-timing-function: ease-out;
+  }
+
+  /* .mySwiper2 .swiper-slide img {
+    height: 450px;
+  } */
+
+  /* Make the active slide fully opaque */
+  .mySwiper2 .swiper-slide-active {
+    opacity: 1;
+  }
+}
+
+@media (min-width: 337px) and (max-width: 976px) {
+  .title2 {
+    color: white;
+    font-size: 20px;
+    font-weight: bold;
+    text-align: center;
+  }
+
+  .mySwiper2 {
+    display: flex;
+    height: 400px;
+  }
+
+  .myswiper2 .swiper-coverflow {
+    justify-content: center;
+  }
+
+  /* Make all slides slightly transparent */
+  .mySwiper2 .swiper-slide {
+    opacity: 0.6;
+    transition: transform 0.8s, opacity 0.8s;
+    transition-timing-function: ease-out;
+  }
+
+  /* .mySwiper2 .swiper-slide img {
+    height: 450px;
+  } */
+
+  /* Make the active slide fully opaque */
+  .mySwiper2 .swiper-slide-active {
+    opacity: 1;
+  }
+}
+
+@media (min-width: 977px) {
+  .title2 {
+    color: white;
+    font-size: 20px;
+    font-weight: bold;
+    text-align: center;
+  }
+
+  .mySwiper2 {
+    display: flex;
+    height: 500px;
+  }
+
+  .myswiper2 .swiper-coverflow {
+    justify-content: center;
+  }
+
+  /* Make all slides slightly transparent */
+  .mySwiper2 .swiper-slide {
+    opacity: 0.6;
+    transition: transform 0.8s, opacity 0.8s;
+    transition-timing-function: ease-out;
+  }
+
+  /* .mySwiper2 .swiper-slide img {
+    height: 450px;
+  } */
+
+  /* Make the active slide fully opaque */
+  .mySwiper2 .swiper-slide-active {
+    opacity: 1;
+  }
+}
