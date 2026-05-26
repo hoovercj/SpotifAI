@@ -1,148 +1,97 @@
-import React from 'react'
-import Modal from 'react-bootstrap/Modal'
-import { connect } from 'react-redux'
-import { showProfile, hideProfile, logoutUser } from '../store/userSlice'
-import { Formik, Field, ErrorMessage } from 'formik'
-import Form from 'react-bootstrap/Form'
-import * as Yup from 'yup'
-import { updateProfile } from '../store/userSlice'
-import Button from 'react-bootstrap/Button'
-import Container from 'react-bootstrap'
-import { useNavigate } from 'react-router-dom'
+import React from "react"
+import { useDispatch, useSelector } from "react-redux"
+import { Formik, Form, Field, ErrorMessage } from "formik"
+import * as Yup from "yup"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/Components/ui/dialog"
+import { Button } from "@/Components/ui/button"
+import { Input } from "@/Components/ui/input"
+import { cn } from "@/lib/utils"
+import { hideProfile, updateProfile } from "../store/userSlice"
 
-const UserProfile = (props) => {
-  const validationSchema = Yup.object().shape({
-    name: Yup.string().required('First Name is required'),
-    zip: Yup.string()
-      .matches(/^[0-9]{5}$/, 'Zip Code must be a 5-digit number')
-      .required('Zip Code is required'),
-  })
+const validationSchema = Yup.object().shape({
+  name: Yup.string().required("First Name is required"),
+  zip: Yup.string()
+    .matches(/^[0-9]{5}$/, "Zip Code must be a 5-digit number")
+    .required("Zip Code is required"),
+})
 
-  const onSubmit = (values) => {
-    props.updateProfile(values)
-  }
+export default function UserProfile() {
+  const dispatch = useDispatch()
+  const open = useSelector((s) => Boolean(s.user?.showProfile))
+  const profile = useSelector((s) => s.user?.profile) || {}
 
   return (
-    <>
-      <Modal
-        show={props.modal}
-        onHide={props.hideProfile}
-        backdrop="static"
-        keyboard={false}
-        className="bg-dark text-light "
-        centered
-      >
-        <div className="border border-secondary">
-          <Modal.Header className="bg-primary text-light border border-primary">
-            <Modal.Title>Edit Profile</Modal.Title>
-          </Modal.Header>
-          <Formik
-            initialValues={{
-              zip: props.profile?.zip || '',
-              name: props.profile?.name || '',
-            }}
-            validationSchema={validationSchema}
-            onSubmit={onSubmit}
-          >
-            {({
-              isSubmitting,
-              handleSubmit,
-              handleChange,
-              handleBlur,
-              values,
-              touched,
-              isValid,
-              errors,
-            }) => (
-              <Form
-                noValidate
-                onSubmit={handleSubmit}
-                className="bg-dark text-light mb-0"
-              >
-                <Modal.Body className="bg-dark text-light">
-                  <Form.Group controlId="name" className="mb-3">
-                    <div className="mb-3">
-                      These fields are required to personalize your experience.
-                    </div>
-                    <Form.Label>First Name</Form.Label>
+    <Dialog open={open} onOpenChange={(next) => !next && dispatch(hideProfile())}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Your profile</DialogTitle>
+          <DialogDescription>
+            Used to tailor weather, transit, and news segments to your area.
+          </DialogDescription>
+        </DialogHeader>
 
-                    <Form.Control
-                      type="text"
-                      name="name"
-                      placeholder="Enter first name"
-                      value={values.name || ''}
-                      onChange={handleChange}
-                      isValid={touched.name && !errors.name}
-                      isInvalid={touched.name && !!errors.name}
-                    />
-                    <Form.Control.Feedback type="invalid">
-                      {errors.name}
-                    </Form.Control.Feedback>
-                  </Form.Group>
+        <Formik
+          initialValues={{ name: profile.name || "", zip: profile.zip || "" }}
+          enableReinitialize
+          validationSchema={validationSchema}
+          onSubmit={(values) => dispatch(updateProfile(values))}
+        >
+          {({ errors, touched, isSubmitting }) => (
+            <Form className="flex flex-col gap-4">
+              <label className="flex flex-col gap-1.5">
+                <span className="text-sm font-medium">First name</span>
+                <Field
+                  as={Input}
+                  name="name"
+                  placeholder="Your first name"
+                  className={cn(errors.name && touched.name && "border-destructive")}
+                />
+                <ErrorMessage
+                  name="name"
+                  component="span"
+                  className="text-xs text-destructive"
+                />
+              </label>
 
-                  <Form.Group controlId="zip" className="mb-3">
-                    <Form.Label>Zip Code</Form.Label>
+              <label className="flex flex-col gap-1.5">
+                <span className="text-sm font-medium">Zip code</span>
+                <Field
+                  as={Input}
+                  name="zip"
+                  inputMode="numeric"
+                  placeholder="12345"
+                  className={cn(errors.zip && touched.zip && "border-destructive")}
+                />
+                <ErrorMessage
+                  name="zip"
+                  component="span"
+                  className="text-xs text-destructive"
+                />
+              </label>
 
-                    <Form.Control
-                      type="text"
-                      name="zip"
-                      placeholder="Enter zip code"
-                      value={values.zip || ''}
-                      onChange={handleChange}
-                      isValid={touched.zip && !errors.zip}
-                      isInvalid={touched.zip && !!errors.zip}
-                    />
-                    <Form.Control.Feedback type="invalid">
-                      {errors.zip}
-                    </Form.Control.Feedback>
-                  </Form.Group>
-                </Modal.Body>
-                <Modal.Footer className="bg-dark text-light">
-                  {props.profile?.zip && props.profile?.name ? (
-                    <Button
-                      variant="secondary"
-                      onClick={() => props.hideProfile()}
-                    >
-                      Cancel
-                    </Button>
-                  ) : (
-                    <a href="/">
-                      <Button
-                        variant="secondary"
-                        onClick={() => props.logout()}
-                      >
-                        Log Out
-                      </Button>
-                    </a>
-                  )}
-                  <Button
-                    variant="primary"
-                    type="submit"
-                    disabled={isSubmitting}
-                    title="Submit Product"
-                  >
-                    Save
-                  </Button>
-                </Modal.Footer>
-              </Form>
-            )}
-          </Formik>
-        </div>
-      </Modal>
-    </>
+              <DialogFooter className="mt-2 flex-row justify-end gap-2 sm:space-x-0">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => dispatch(hideProfile())}
+                >
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={isSubmitting}>
+                  Save
+                </Button>
+              </DialogFooter>
+            </Form>
+          )}
+        </Formik>
+      </DialogContent>
+    </Dialog>
   )
 }
-
-const mapStateToProps = (state) => ({
-  modal: state.user?.showProfile,
-  profile: state.user?.profile,
-})
-
-const mapDispatchToProps = (dispatch) => ({
-  showProfile: () => dispatch(showProfile()),
-  hideProfile: () => dispatch(hideProfile()),
-  updateProfile: (profile) => dispatch(updateProfile(profile)),
-  logout: () => dispatch(logoutUser()),
-})
-
-export default connect(mapStateToProps, mapDispatchToProps)(UserProfile)

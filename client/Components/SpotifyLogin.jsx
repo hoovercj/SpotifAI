@@ -1,87 +1,105 @@
-import React from 'react'
-import Container from 'react-bootstrap/Container'
-import Card from 'react-bootstrap/Card'
+import React, { useMemo } from "react"
+import { Sparkles, Music2, Mic2, Radio as RadioIcon, MapPin } from "lucide-react"
+import { Button } from "@/Components/ui/button"
 
-const spotifyRedirect =
-  process.env.NODE_ENV === 'production'
+// Preserved from the original webpack/DotenvWebpack-era config — these are
+// injected at build time by vite.config.mjs's `define` block.
+const CLIENT_ID = process.env.SPOTIFY_CLIENT_ID
+const REDIRECT_URI =
+  process.env.NODE_ENV === "production"
     ? process.env.SPOTIFY_REDIRECT_URI_PROD
     : process.env.SPOTIFY_REDIRECT_URI_DEV
 
-// `playlist-read-private` and `playlist-read-collaborative` are required for
-// `/v1/me/playlists` to return private/collaborative playlists; without them
-// Spotify replies 403.
-//
-// We deliberately omit `show_dialog=true` so that returning users who have
-// already consented to the app are signed in silently (Spotify just redirects
-// back with a fresh `code`). If you need to force the account-picker (e.g.
-// when debugging an account-mismatch / Dev-Mode allowlist issue), re-add
-// `&show_dialog=true` below.
-const AUTH_URL = `https://accounts.spotify.com/authorize?client_id=${process.env.SPOTIFY_CLIENT_ID}&response_type=code&redirect_uri=${spotifyRedirect}&scope=streaming%20user-read-email%20user-read-private%20user-library-read%20user-library-modify%20user-read-playback-state%20user-modify-playback-state%20playlist-read-private%20playlist-read-collaborative`
+const SCOPES = [
+  "streaming",
+  "user-read-email",
+  "user-read-private",
+  "user-library-read",
+  "user-library-modify",
+  "user-top-read",
+  "user-read-recently-played",
+  "user-follow-read",
+  "user-follow-modify",
+  "playlist-read-private",
+  "playlist-read-collaborative",
+  "playlist-modify-public",
+  "playlist-modify-private",
+  "user-modify-playback-state",
+  "user-read-playback-state",
+  "user-read-currently-playing",
+].join(" ")
+
+function buildAuthUrl() {
+  const params = new URLSearchParams({
+    client_id: CLIENT_ID || "",
+    response_type: "code",
+    redirect_uri: REDIRECT_URI || "",
+    scope: SCOPES,
+  })
+  return `https://accounts.spotify.com/authorize?${params.toString()}`
+}
+
+const FEATURES = [
+  {
+    icon: Music2,
+    title: "Your music, your way",
+    body: "Stream playlists, albums, and saved tracks straight from your Spotify library.",
+  },
+  {
+    icon: Mic2,
+    title: "An AI DJ on the air",
+    body: "Pick a host whose voice fits the vibe — they introduce tracks, weather, and headlines.",
+  },
+  {
+    icon: RadioIcon,
+    title: "Live-radio feel",
+    body: "DJ banter is woven between tracks with smart audio ducking, so the music stays front-and-center.",
+  },
+  {
+    icon: MapPin,
+    title: "Hyper-local touches",
+    body: "Localized weather, transit, and news segments based on your profile zip.",
+  },
+]
 
 export default function SpotifyLogin() {
+  const authUrl = useMemo(buildAuthUrl, [])
   return (
-    <Container
-      className="d-flex justify-content-center align-items-center"
-      style={{ minHeight: '75vh' }}
-    >
-      <span>
-        <Card style={{ width: '24rem' }} bg="dark" border="warning">
-          <Card.Header className="text-warning h5">
-            Beta Notice{' '}
-            <Card.Subtitle className="my-1 text-warning">
-              Spotify Development Mode
-            </Card.Subtitle>
-          </Card.Header>
-          <Card.Body>
-            <Card.Text className="text-light">
-              While we await Spotify App Certification, they restrict API access
-              to registered developers. If this isn't you, the app will not
-              function properly at this time.
-            </Card.Text>
-            <Card.Text className="text-light">
-              In the meantime, refer to these resources:
-              <br />
-              <span className="ms-3">🎬</span>
-              <Card.Link
-                href="https://vimeo.com/869263029/f6f59850b1?share=copy"
-                className="text-warning ms-2"
-              >
-                Project Video with Demo
-              </Card.Link>
-              <br />
-              <span className="ms-3">🔉</span>
-              <Card.Link
-                href="https://portfolio.rev4labs.com/audio/wyou-samples/broadcast-demo-rusty.mp3"
-                className="text-warning ms-2"
-              >
-                Broadcast Audio Demo
-              </Card.Link>
-              <br />
-              <span className="ms-3">💻</span>
-              <Card.Link
-                href="https://github.com/hoovercj/SpotifAI"
-                className="text-warning ms-2"
-              >
-                Source Code on GitHub
-              </Card.Link>
-              <br />
-              <span className="ms-3">📅</span>
-              <Card.Link
-                className="text-warning ms-2"
-                href="mailto:chris@armbrustermail.com,jejanov@mac.com?subject=Schedule%20WYOU%20Demo"
-              >
-                Schedule Private Demo
-              </Card.Link>
-            </Card.Text>
+    <div className="w-full max-w-md rounded-2xl border border-border/60 bg-card/70 p-6 shadow-xl shadow-black/40 backdrop-blur">
+      <div className="flex items-center gap-3">
+        <span className="grid h-11 w-11 place-items-center rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-500 shadow-lg shadow-fuchsia-900/40">
+          <Sparkles className="h-5 w-5 text-foreground" />
+        </span>
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">
+            Spotif
+            <span className="bg-gradient-to-r from-violet-400 to-fuchsia-400 bg-clip-text text-transparent">
+              AI
+            </span>
+          </h1>
+          <p className="text-xs text-muted-foreground">AI radio for your Spotify library</p>
+        </div>
+      </div>
 
-            <div className="text-center">
-              <a className="btn btn-success btn-lg my-3" href={AUTH_URL}>
-                Login With Spotify
-              </a>
+      <ul className="mt-6 flex flex-col gap-4">
+        {FEATURES.map(({ icon: Icon, title, body }) => (
+          <li key={title} className="flex items-start gap-3">
+            <Icon className="mt-0.5 h-5 w-5 shrink-0 text-fuchsia-400" />
+            <div>
+              <p className="text-sm font-medium">{title}</p>
+              <p className="text-xs text-muted-foreground">{body}</p>
             </div>
-          </Card.Body>
-        </Card>
-      </span>
-    </Container>
+          </li>
+        ))}
+      </ul>
+
+      <Button asChild size="lg" className="mt-7 w-full">
+        <a href={authUrl}>Continue with Spotify</a>
+      </Button>
+
+      <p className="mt-4 text-center text-[11px] leading-relaxed text-muted-foreground">
+        Spotify Premium required to stream music in the browser. We only see scopes we ask for.
+      </p>
+    </div>
   )
 }

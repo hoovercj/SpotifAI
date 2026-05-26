@@ -1,52 +1,54 @@
-import React, { useEffect, useState } from 'react'
-import { connect } from 'react-redux'
-import { fetchUserStations } from '../store/stationsSlice'
-import { fetchDjs } from '../store/djsSlice'
-import useAuth from './useAuth'
-import Radio from './Radio'
-import Home from './Home'
-import { Routes, Route } from 'react-router-dom'
-import UserProfile from './UserProfile'
-import { showProfile } from '../store/userSlice'
-import { Col, Row } from 'react-bootstrap'
+import React, { useEffect } from "react"
+import { useDispatch } from "react-redux"
+import { Routes, Route, Navigate } from "react-router-dom"
+import useAuth from "./useAuth"
+import UserProfile from "./UserProfile"
+import AppShell from "./shell/AppShell"
+import HomeTab from "./tabs/HomeTab"
+import SearchTab from "./tabs/SearchTab"
+import LibraryTab from "./tabs/LibraryTab"
+import { fetchDjs } from "../store/djsSlice"
+import { fetchUserStations } from "../store/stationsSlice"
 
-const AppAuthWrapper = (props) => {
-  const accessToken = useAuth(props.code)
+/**
+ * Mounted once the user is authenticated (or has a fresh OAuth `code`).
+ *  - Drives the OAuth/refresh loop via `useAuth(code)`
+ *  - Boots the Redux catalogs once an accessToken is available
+ *  - Renders the AppShell with the three nested tab routes
+ *  - Hosts the UserProfile dialog (opens from AccountMenu)
+ *  - Redirects legacy /radio/* bookmarks to /home
+ */
+export default function AppAuthWrapper({ code }) {
+  const dispatch = useDispatch()
+  const accessToken = useAuth(code)
 
   useEffect(() => {
-    console.log('AppAuthWrapper useEffect', accessToken)
-    props.fetchDjs()
+    dispatch(fetchDjs())
+  }, [dispatch])
+
+  useEffect(() => {
     if (accessToken) {
-      // Spotify deprecated Dev-Mode access to algorithmic/editorial
-      // playlists in Nov 2024 (the hard-coded `37i9dQZF1...` seed list used
-      // to live here). We now only show playlists owned by the signed-in
-      // user.
-      props.fetchUserStations()
+      // Spotify deprecated Dev-Mode access to editorial/algorithmic
+      // playlists in Nov 2024. We only show playlists owned by the
+      // signed-in user.
+      dispatch(fetchUserStations())
     }
-  }, [accessToken])
+  }, [accessToken, dispatch])
 
   return (
-    <Col>
-      <Row>
-        <UserProfile />
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="radio/*" element={<Radio />} />
-        </Routes>
-      </Row>
-    </Col>
+    <>
+      <UserProfile />
+      <Routes>
+        <Route element={<AppShell />}>
+          <Route index element={<Navigate to="/home" replace />} />
+          <Route path="/home" element={<HomeTab />} />
+          <Route path="/search" element={<SearchTab />} />
+          <Route path="/library" element={<LibraryTab />} />
+          {/* Backwards-compat: old HashRouter paths used /radio/* */}
+          <Route path="/radio/*" element={<Navigate to="/home" replace />} />
+          <Route path="*" element={<Navigate to="/home" replace />} />
+        </Route>
+      </Routes>
+    </>
   )
 }
-
-const mapStateToProps = (state) => ({
-  accessToken: state.user?.accessToken,
-  profile: state.user?.profile,
-})
-
-const mapDispatchToProps = (dispatch) => ({
-  fetchUserStations: () => dispatch(fetchUserStations()),
-  fetchDjs: () => dispatch(fetchDjs()),
-  showProfile: () => dispatch(showProfile()),
-})
-
-export default connect(mapStateToProps, mapDispatchToProps)(AppAuthWrapper)
