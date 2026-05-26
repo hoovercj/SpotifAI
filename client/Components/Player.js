@@ -57,16 +57,21 @@ const Player = (props) => {
         >
           <div style={{ textAlign: 'center' }}>
             <div>
-              <Image
-                ref={image1Ref} // Attach ref to first image
-                src={props.dj.details?.image}
-                style={{
-                  maxHeight: '600px',
-                  maxWidth: '100%',
-                  width: '100%',
-                  objectFit: 'contain',
-                }}
-              />
+              {/* Skip the <Image> entirely when no source is available; */}
+              {/* otherwise React renders `src="undefined"` which the browser */}
+              {/* turns into a spurious GET /undefined → 404. */}
+              {props.dj?.details?.image && (
+                <Image
+                  ref={image1Ref} // Attach ref to first image
+                  src={props.dj.details.image}
+                  style={{
+                    maxHeight: '600px',
+                    maxWidth: '100%',
+                    width: '100%',
+                    objectFit: 'contain',
+                  }}
+                />
+              )}
             </div>
             <div>
               <h4 className="h5 mt-2 mb-0">DJ {props.dj?.djName}</h4>
@@ -85,7 +90,11 @@ const Player = (props) => {
                 maxWidth: '100%',
                 width: '100%',
                 objectFit: 'contain',
-                backgroundImage: `url(${props.track?.image})`,
+                // Avoid `url(undefined)` which the browser turns into a
+                // GET /undefined → 404 before a track is selected.
+                backgroundImage: props.track?.image
+                  ? `url(${props.track.image})`
+                  : 'none',
                 backgroundSize: 'cover',
                 backgroundPosition: '50% 50%',
                 aspectRatio: '1 / 1',
@@ -98,7 +107,7 @@ const Player = (props) => {
             </div>
             <div>
               <p>
-                {props.track?.artists.map((artist) => artist.name).join(', ')}
+                {props.track?.artists?.map((artist) => artist.name).join(', ')}
               </p>
             </div>
           </div>

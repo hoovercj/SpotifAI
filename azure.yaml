@@ -1,0 +1,32 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Azure/azure-dev/main/schemas/v1.0/azure.yaml.json
+
+name: spotifai
+metadata:
+  template: spotifai@0.1.0
+
+services:
+  web:
+    project: .
+    language: js
+    host: containerapp
+    docker:
+      path: Dockerfile
+
+hooks:
+  postprovision:
+    windows:
+      shell: pwsh
+      run: |
+        Write-Host ""
+        Write-Host "Provisioning complete. Reminder: add the Container App FQDN below to your"
+        Write-Host "Spotify Developer Dashboard as an authorized redirect URI:"
+        Write-Host ""
+        azd env get-value WEB_URI
+    posix:
+      shell: sh
+      run: |
+        echo ""
+        echo "Provisioning complete. Reminder: add the Container App FQDN below to your"
+        echo "Spotify Developer Dashboard as an authorized redirect URI:"
+        echo ""
+        azd env get-value WEB_URI

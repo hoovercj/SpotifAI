@@ -1,123 +1,175 @@
-# WYOU Radio
+# SpotifAI
 
-## Overview
+An AI-powered personal radio station that turns your Spotify queue into a hosted broadcast. Four AI DJs introduce your tracks with local news, traffic, and weather, music history, and more.
 
-WYOU Radio is an innovative AI-driven music application that transforms Spotify music streams into a personalized radio experience, complete with AI DJs. This full-stack app integrates advanced AI technologies to generate dynamic DJ dialogues that accompany a live Spotify stream, creating an immersive and interactive listening experience.
+Forked from [chrisallenarmbruster/wyou-radio](https://github.com/chrisallenarmbruster/wyou-radio); see [ATTRIBUTION.md](ATTRIBUTION.md).
 
-[![WYOU-Radio Composite](/public/images/screenshots/wyou-radio-composite.png)](https://portfolio.rev4labs.com/audio/wyou-samples/broadcast-demo-rusty.mp3)
+> **Status:** active development — APIs and segment formats may shift.
 
-<br>
+---
 
-## Listen to Broadcast Sample
+## What it does
 
-### [Click to Play Broadcast Demo 📻 🎵 🔊](https://portfolio.rev4labs.com/audio/wyou-samples/broadcast-demo-rusty.mp3)
+- Streams from your Spotify Premium account via the Web Playback SDK.
+- Wraps each track transition in a generated DJ break: song intros, weather, on-this-day music history, local news briefs, and traffic alerts.
+- Uses **Google Gemini** end-to-end
 
-This is a sample of a WYOU Radio broadcast. It features AI disc jockey Rusty Maddox, a WYOU Radio personality, whose unscripted narrative and voice were generated on-the-fly by this app using AI technologies to accompany and mix with a live Spotify music stream.
+  | DJ            | Style                            | Gemini voice |
+  | ------------- | -------------------------------- | ------------ |
+  | Rusty Maddox  | Gruff classic-rock biker uncle   | `Fenrir`     |
+  | M-Quake       | Sassy female pop / contemporary  | `Aoede`      |
+  | Nigel Windsor | Refined British classical        | `Charon`     |
+  | Lady Lyric    | Confident hip-hop / R&B female   | `Kore`       |
 
-**Note:** _The volume may need to be adjusted in the player control._
+---
 
-<br>
+## Requirements
 
-## Meet the WYOU AI DJs
+- **Node.js ≥ 22** (see `.nvmrc`)
+- **PostgreSQL 14+** (any flavor — local Docker, Azure Flexible Server, etc.)
+- **Spotify Premium** account + a Spotify Developer app (client ID/secret, redirect URI registered)
+- **Google AI Studio API key** (`GOOGLE_API_KEY`) — free tier is sufficient to start
+- *(optional)* **Rejseplanen access ID** — free registration; needed only if you want Copenhagen transit alerts to use the live Rejseplanen feed (otherwise falls back to DSB RSS)
+- *(optional)* **OpenWeather** + **LocationIQ** API keys for the weather segment
 
-Here are some audio samples from the WYOU AI DJs. These snippets were unscripted and dynamically generated on-the-fly by this app. They are isolated from the music stream to highlight the AI DJ's voice and narrative.
+---
 
-##### [🔊 M-Quake](https://portfolio.rev4labs.com/audio/wyou-samples/dj--history-demo-mquake.mp3) (This Day in Music History)
+## Quick start (local)
 
-##### [🔊 Lady Lyric](https://portfolio.rev4labs.com/audio/wyou-samples/dj-segue-demo-ladylyric.mp3) (Song Segue)
+```powershell
+# 1. Clone and install
+git clone https://github.com/hoovercj/SpotifAI.git
+cd SpotifAI
+npm install
 
-##### [🔊 Rusty Maddox](https://portfolio.rev4labs.com/audio/wyou-samples/dj-segue-demo-rusty-joan-jett.mp3) (Funny Story)
+# 2. Copy .envSample → .env and fill in at minimum:
+#    GOOGLE_API_KEY, SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET,
+#    SPOTIFY_REDIRECT_URI_DEV, DATABASE_URL, SESSION_SECRET
+Copy-Item .envSample .env
 
-##### [🔊 Nigel Windsor](https://portfolio.rev4labs.com/audio/wyou-samples/dj-weather-demo-nigel.mp3) (Weather)
+# 3. Make sure PostgreSQL is running and the database in DATABASE_URL exists.
+#    Tables are auto-created/migrated by Sequelize on startup.
 
-<br>
+# 4. Build the frontend bundle (or use `npm run build` for watch mode)
+npm run build:prod
 
-## Key Features
+# 5. Start the server
+npm start
+```
 
-- **Personalized AI Radio**: Leveraging AI to create a unique radio experience with dynamically generated DJ dialogues.
-- **Spotify Integration**: Seamlessly streams music from Spotify, allowing users to enjoy their favorite tracks.
-- **Custom Audio Mixer**: A sophisticated mixer for cuing and blending DJ voice tracks with music.
-- **On-the-fly Script Generation**: Utilizes LangChain, OpenAI, and ElevenLabs for real-time script and voice track generation.
+Open <http://localhost:3000>, sign in with Spotify, pick a DJ, and hit play.
 
-<br>
+---
 
-## Screenshots
+## Architecture at a glance
 
-### Select a Disc Jockey
+```
+client/        React 18 + Redux Toolkit + Spotify Web Playback SDK
+server/
+  app.js       Express app
+  routes/
+    spotify.js   OAuth + playback control
+    content.js   /next-content endpoint — per-(session,DJ) chat
+  services/
+    llm/       Provider-pluggable chat (default: Gemini)
+    tts/       Provider-pluggable speech synth (default: Gemini → WAV)
+    news/      RSS dispatchers: dk (DR), es (El País), iowa (IPR) + dedupe
+    transit/   Copenhagen — Rejseplanen primary, DSB RSS fallback, 5-min cache
+    rundown/   Show runner; weaves songs, weather, history, news, transit
+  db/          Sequelize models (PostgreSQL)
+```
 
-![Select a DJ](/public/images/screenshots/select-dj-rusty.png)
+### Provider abstraction
 
-<br>
+The LLM and TTS layers are abstracted behind small dispatch modules so you can
+swap providers without touching the rest of the app:
 
-### Select Music
+```js
+// server/services/llm/index.js
+const PROVIDERS = { gemini: require('./gemini') };
+// dispatch via process.env.LLM_PROVIDER (default: "gemini")
 
-![Select Music](/public/images/screenshots/carousel.png)
+// server/services/tts/index.js
+const PROVIDERS = { gemini: require('./gemini') };
+// dispatch via process.env.TTS_PROVIDER (default: "gemini")
+```
 
-<br>
+To add an OpenAI/ElevenLabs/Azure provider later, drop in `./openai.js` etc.
+and register it in the `PROVIDERS` map.
 
-### Now Playing
+---
 
-![Now Playing](/public/images/screenshots/now-playing-mquake.png)
+## Configuration reference
 
-<br>
+See [.envSample](.envSample) for the full list. The required variables are:
 
-## Watch the Project Video
+| Variable                   | Purpose                                       |
+| -------------------------- | --------------------------------------------- |
+| `GOOGLE_API_KEY`           | Gemini text + TTS                             |
+| `SPOTIFY_CLIENT_ID/SECRET` | Spotify OAuth                                 |
+| `SPOTIFY_REDIRECT_URI_DEV` | OAuth redirect (must match Spotify dashboard) |
+| `DATABASE_URL`             | PostgreSQL connection string                  |
+| `SESSION_SECRET`           | Express session signing                       |
 
-Here is a link to the project video hosted by the WYOU AI disc jockey personalities and, as always, unscripted.
+Optional knobs:
 
-[WYOU Radio Project Video](https://vimeo.com/869263029/f6f59850b1?share=copy)
+| Variable                  | Default                        | What it controls                                |
+| ------------------------- | ------------------------------ | ----------------------------------------------- |
+| `LLM_PROVIDER`            | `gemini`                       | Chat provider key                               |
+| `GEMINI_TEXT_MODEL`       | `gemini-2.5-flash`             | Gemini chat model                               |
+| `GEMINI_TEXT_TEMPERATURE` | `1.0`                          | Chat temperature                                |
+| `TTS_PROVIDER`            | `gemini`                       | Speech provider key                             |
+| `GEMINI_TTS_MODEL`        | `gemini-2.5-flash-preview-tts` | Gemini TTS model                                |
+| `TTS_OUTPUT`              | `wav`                          | Output format (mp3 needs ffmpeg — not bundled)  |
+| `NEWS_TOPIC_ROTATION`     | `dk,es,iowa`                   | Comma-separated locale rotation for news brief  |
+| `TRANSIT_ENABLED`         | `true`                         | Toggle the Copenhagen transit segment           |
+| `REJSEPLANEN_ACCESS_ID`   | *(unset → DSB RSS only)*       | Live disruption feed                            |
 
-<br>
+---
 
-## Technologies
+## Deployment (Azure Container Apps)
 
-- **Frontend**: React/Redux for a Single Page Application (SPA) design.
-- **Backend**: Node.js and Express.
-- **AI and Voice Generation**: LangChain, OpenAI, and ElevenLabs.
-- **Database**: PostgreSQL.
-- **Music Streaming**: Spotify API.
+The repo ships a single-stage `Dockerfile` (multi-stage build, `node:22-alpine`, scale-to-zero friendly) and a full [Azure Developer CLI](https://aka.ms/azd) template under `infra/` that provisions:
 
-<br>
+- **Azure Container Apps Environment** (Consumption plan) hosting the web app at `min-replicas=0, max-replicas=1`
+- **Azure Container Registry** (Basic SKU) for the built image
+- **Azure Database for PostgreSQL Flexible Server** (Burstable `Standard_B1ms`, v16, 32 GB) — eligible for the 12-month free offer on new subscriptions
+- **Log Analytics workspace** for Container App logs
+- A **user-assigned managed identity** with `AcrPull` on the registry — no admin credentials stored
+- All app secrets bound as **Container App secrets** (sourced into the runtime container as env vars)
 
-## Getting Started
+### Deploy in one shot
 
-### Requirements
+```powershell
+# 1. Install azd if you don't have it: https://aka.ms/azd-install
 
-- Node.js
-- PostgreSQL
-- Spotify Developer Account with Client ID and Client Secret
-- API keys for OpenAI, LangChain, ElevenLabs and Open Weather
+# 2. From the repo root:
+azd auth login
+azd env new spotifai-prod
+azd env set GOOGLE_API_KEY        <your-gemini-key>
+azd env set SPOTIFY_CLIENT_ID     <your-spotify-client-id>
+azd env set SPOTIFY_CLIENT_SECRET <your-spotify-client-secret>
+# Optional:
+azd env set OPEN_WEATHER_API_KEY    <key>
+azd env set LOCATION_IQ_API_KEY     <key>
+azd env set REJSEPLANEN_ACCESS_ID   <key>
 
-### Installation
+# 3. Provision + build + deploy in one go
+azd up
+```
 
-- Clone this repo.
-- Run "npm install".
-- Configure the Spotify API redirect URIs in your Spotify Developer Dashboard.
-- Create a .env file in the local root directory of the repo or set environment variables accordingly. See .envSample for required environment variables. You will need to specify API keys for OpenAI, LangChain, ElevenLabs and Open Weather as well as your Spotify client ID and client secret. Set your Spotify Redirect URIs and the port you want to run the server on.
-- Create a PostgreSQL database named "wyou-radio" and set the DATABASE_URL environment variable to the PostgreSQL connection string. Edit the seed.js file in the server/db directory to include your Spotify user email. Run the seed.js file to seed the database (i.e. "node seed.js").
+The Postgres admin password and the Express `SESSION_SECRET` are auto-generated and stored in your azd environment.
 
-### Usage
+After `azd up` finishes it prints the Container App URL. **Add that URL to your Spotify Developer dashboard** as an additional redirect URI before signing in.
 
-- Run "npm run start:prod"
-- Navigate to the app in your browser. If running locally, localhost and the port you specified in your .env file in your browser (e.g. localhost:3000). If deployed, navigate to the URL (e.g. https://some_domain).
-- Login with your Spotify account.
-- Select a DJ.
-- Select music.
-- Enjoy!
-- Note: you can toggle line 166 in the client/Components/Radio.js file to turn on or off the DJ related API calls.
+### Iterating
 
-<br>
+- `azd deploy` — rebuilds the image, pushes to ACR, and rolls the Container App
+- `azd provision` — re-applies Bicep changes only
+- `azd down` — tears everything down (use when you're done experimenting)
 
-## Engineers
-
-### [🧑 Chris Armbruster](https://github.com/chrisallenarmbruster)
-
-### [🧑 Joel Janov](https://github.com/https://github.com/jejanov)
-
-<br>
+---
 
 ## License
 
-Copyright (c) 2023 Rev4Labs
-
-This project is MIT licensed.
+MIT — see [LICENSE](LICENSE).

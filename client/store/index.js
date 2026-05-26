@@ -5,12 +5,12 @@ import playerReducer from "./playerSlice"
 import userReducer from "./userSlice"
 import stationsReducer from "./stationsSlice"
 import djsReducer from "./djsSlice"
-import thunkMiddleware from "redux-thunk"
 
 const loggerMiddleware = createLogger({
   collapsed: true,
 })
 
+// @reduxjs/toolkit already includes redux-thunk in getDefaultMiddleware().
 const store = configureStore({
   reducer: {
     user: userReducer,
@@ -19,7 +19,8 @@ const store = configureStore({
     stations: stationsReducer,
     djs: djsReducer,
   },
-  middleware: [loggerMiddleware, thunkMiddleware],
+  middleware: (getDefaultMiddleware) =>
+    getDefaultMiddleware().concat(loggerMiddleware),
 })
 
 export default store

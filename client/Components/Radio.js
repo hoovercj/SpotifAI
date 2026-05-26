@@ -204,7 +204,7 @@ export class Radio extends Component {
   getPlayer = async (playerInstance) => {
     console.log('Got player instance:', await playerInstance)
     this.player = { player: await playerInstance }
-    await this.player?.player?.setName('WYOU Radio')
+    await this.player?.player?.setName('SpotifAI Radio')
   }
 
   spotifyEventHandler = async (state) => {

@@ -1,9 +1,16 @@
-const { fetchSpeech } = require("./audioService");
+const { synthesize } = require('./tts');
 
-const { saveDebugTrackerToFile } = require("./utl/debugTracker");
-const { songPrompts } = require("./utl/promptConstructor");
-const { djCharacters } = require("./djCharacters");
+const { saveDebugTrackerToFile } = require('./utl/debugTracker');
+const { songPrompts } = require('./utl/promptConstructor');
+const { djCharacters } = require('./djCharacters');
 
+/**
+ * Generates spoken-word audio for a single rundown slot.
+ *
+ * If `customPrompt` is provided, it's sent verbatim to the DJ chat (used for
+ * weather, history, news, transit, etc.). Otherwise the song-intro template
+ * is built from the rundown metadata.
+ */
 async function createContent(
   radioStation,
   showName,
@@ -14,9 +21,8 @@ async function createContent(
   user,
   djId,
   station,
-  chain,
-  weather,
-  history
+  chat,
+  customPrompt
 ) {
   try {
     const { details } = await djCharacters(djId);
@@ -24,19 +30,9 @@ async function createContent(
 
     const debugTracker = [];
 
-    //TODO: Need to set this up to create Weather, News, etc. Also need to construct chat history.
-
-    let result;
-    if (weather) {
-      result = await chain.call({
-        input: weather,
-      });
-    } else if (history) {
-      result = await chain.call({
-        input: history,
-      });
-    } else {
-      let input = await songPrompts(
+    const input =
+      customPrompt ||
+      (await songPrompts(
         radioStation,
         showName,
         songName,
@@ -46,24 +42,18 @@ async function createContent(
         user,
         djId,
         station
-      );
-      result = await chain.call({
-        input: input,
-      });
-    }
+      ));
+
+    const spokenText = await chat.sendMessage(input);
 
     saveDebugTrackerToFile(debugTracker);
     const timestamp = Date.now();
-    //TODO: maybe clean up the response taking out special characters before sending to the API
-    const response = await fetchSpeech(
-      voiceID,
-      result.response,
-      `${songName}_${bandName}_${timestamp}`
-    );
-    if (response === "error") {
-      console.log(response);
-      return;
-    } else return response;
+    const baseName = `${songName || 'segment'}_${bandName || 'dj'}_${timestamp}`;
+    return await synthesize({
+      text: spokenText,
+      voiceId: voiceID,
+      fileBaseName: baseName,
+    });
   } catch (error) {
     console.log(error);
   }

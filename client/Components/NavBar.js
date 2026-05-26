@@ -2,7 +2,7 @@ import React, { Component } from 'react'
 import Navbar from 'react-bootstrap/Navbar'
 import { connect } from 'react-redux'
 import {
-  clearUser,
+  logoutUser,
   showProfile,
   toggleUseBackendApis,
 } from '../store/userSlice'
@@ -15,7 +15,7 @@ const NavBar = (props) => {
 
   return (
     <Navbar bg="dark" variant="dark" style={{ marginTop: '5px !important' }}>
-      <Navbar.Brand className="ms-3">WYOU Radio</Navbar.Brand>
+      <Navbar.Brand className="ms-3">SpotifAI Radio</Navbar.Brand>
 
       {props.user && (
         <>
@@ -76,10 +76,13 @@ const mapStateToProps = (state) => ({
   currentDj: state.djs.currentDj,
 })
 
-const mapDispatchToProps = {
-  logout: () => clearUser(),
-  showProfile: () => showProfile(),
-  toggleUseBackendApis: () => toggleUseBackendApis(),
-}
+const mapDispatchToProps = (dispatch) => ({
+  // Hits the server to destroy the session cookie, then clears the local
+  // Redux state. Without the server round-trip, a refresh would silently log
+  // the user right back in via /api/spotify/session.
+  logout: () => dispatch(logoutUser()),
+  showProfile: () => dispatch(showProfile()),
+  toggleUseBackendApis: () => dispatch(toggleUseBackendApis()),
+})
 
 export default connect(mapStateToProps, mapDispatchToProps)(NavBar)

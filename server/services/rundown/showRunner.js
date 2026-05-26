@@ -8,38 +8,80 @@ const {
 const { saveToDb, reset } = require('../rundown/rundownUtlities/dbUtilities')
 const currentWeather = require('../currentWeather')
 const historySegment = require('../historySegment')
+const { newsSegment } = require('../news')
+const { transitSegment } = require('../transit/copenhagen')
 const { convertFileToDataURI } = require('../utl/convertMP3FileToDataURI')
 const { createContent } = require('../createContent')
 
-async function showRunner(userEmail, jamSessionId, user, djId, station, chain) {
+/**
+ * Generate audio for a non-song segment, save it to the rundown, return the
+ * playable data URI. Shared by weather / history / news / transit branches.
+ */
+async function emitTalkSegment({
+  jamSessionId,
+  rundownIndex,
+  nextTrackURI,
+  tempSongName,
+  tempBandName,
+  user,
+  djId,
+  station,
+  chat,
+  prompt,
+}) {
+  const content = await createContent(
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    user,
+    djId,
+    station,
+    chat,
+    prompt
+  )
+  const audioURI = await convertFileToDataURI(content.filePath, content.format)
+  await saveToDb(
+    jamSessionId,
+    rundownIndex,
+    nextTrackURI,
+    tempSongName,
+    tempBandName,
+    audioURI,
+    content.text
+  )
+  return audioURI
+}
+
+async function showRunner(userEmail, jamSessionId, user, djId, station, chat) {
   const { lat, long } = user.profile
   const { display_name } = user
-  let content = {}
   let { show, nextTrackURI, tempSongName, tempBandName } =
     await addPlaylistToRundown(userEmail, jamSessionId)
   const currentRundownIndex = await getCurrentRundownIndex(userEmail)
+  const nextSlot = show.rundown[currentRundownIndex + 1]
+  const slotAfterNext = show.rundown[currentRundownIndex + 2]
 
-  if (show.rundown[currentRundownIndex + 1].type === 'song') {
-    let nextElement = show.rundown[currentRundownIndex + 1]
-
+  if (nextSlot.type === 'song') {
     await updateCurrentRundownIndex(userEmail, currentRundownIndex + 1)
-
-    content = await createContent(
+    const content = await createContent(
       show.radioStation,
       show.showName,
-      nextElement.songName,
-      nextElement.bandName,
+      nextSlot.songName,
+      nextSlot.bandName,
       show.date,
       show.timeSlot,
       user,
       djId,
       station,
-      chain
+      chat
     )
-
-    let audioURI = await convertFileToDataURI(content.fileName, 'mp3')
-
-    //  saves the next track dj auido and transcript to the database
+    const audioURI = await convertFileToDataURI(
+      content.filePath,
+      content.format
+    )
     await saveToDb(
       jamSessionId,
       currentRundownIndex + 1,
@@ -49,82 +91,159 @@ async function showRunner(userEmail, jamSessionId, user, djId, station, chain) {
       audioURI,
       content.text
     )
-
     return audioURI
-  } else if (show.rundown[currentRundownIndex + 1].type === 'weather') {
-    let songAfterWeather = show.rundown[currentRundownIndex + 2]
+  }
 
-    await updateCurrentRundownIndex(userEmail, currentRundownIndex + 2)
+  // Talk segments — all advance two slots (over the talk slot AND the next song).
+  await updateCurrentRundownIndex(userEmail, currentRundownIndex + 2)
 
-    let weatherReport = await currentWeather(lat, long)
-    content = await createContent(
-      null,
-      null,
-      null,
-      null,
-      null,
-      null,
+  if (nextSlot.type === 'weather') {
+    const weatherReport = await currentWeather(lat, long)
+    const prompt = `Summarize this weather, be brief. Weather: ${weatherReport}. End the weather report by announcing this song by ${slotAfterNext.bandName} called ${slotAfterNext.songName}. Be very brief.`
+    return emitTalkSegment({
+      jamSessionId,
+      rundownIndex: currentRundownIndex + 2,
+      nextTrackURI,
+      tempSongName,
+      tempBandName,
       user,
       djId,
       station,
-      chain,
-      `Summarize this weather, be brief. Weather: ${weatherReport}. End the weather report by announcing this song by ${songAfterWeather.bandName} called ${songAfterWeather.songName}. Be very brief.`,
-      null
+      chat,
+      prompt,
+    })
+  }
+
+  if (nextSlot.type === 'history') {
+    const prompt = await historySegment(
+      user.profile.name,
+      slotAfterNext.songName,
+      slotAfterNext.bandName
     )
-
-    let audioURI = await convertFileToDataURI(content.fileName, 'mp3')
-
-    await saveToDb(
+    return emitTalkSegment({
       jamSessionId,
-      currentRundownIndex + 2,
+      rundownIndex: currentRundownIndex + 2,
       nextTrackURI,
       tempSongName,
       tempBandName,
-      audioURI,
-      content.text
-    )
-
-    return audioURI
-  } else if (show.rundown[currentRundownIndex + 1].type === 'history') {
-    let songAfterHistory = show.rundown[currentRundownIndex + 2]
-
-    await updateCurrentRundownIndex(userEmail, currentRundownIndex + 2)
-
-    let history = await historySegment(
-      user.profile.name,
-      songAfterHistory.songName,
-      songAfterHistory.bandName
-    )
-
-    content = await createContent(
-      null,
-      null,
-      null,
-      null,
-      null,
-      null,
-      display_name,
+      user: display_name,
       djId,
       station,
-      chain,
-      null,
-      history
-    )
+      chat,
+      prompt,
+    })
+  }
 
-    let audioURI = await convertFileToDataURI(content.fileName, 'mp3')
-
-    await saveToDb(
+  if (nextSlot.type === 'news') {
+    const prompt = await newsSegment({
+      name: user.profile.name || display_name,
+      nextTrackTitle: slotAfterNext.songName,
+      nextTrackArtist: slotAfterNext.bandName,
+    })
+    if (!prompt) {
+      // No fresh article available — degrade to a plain song intro for the
+      // slot we were going to skip into.
+      return runSongFallback({
+        jamSessionId,
+        slot: slotAfterNext,
+        rundownIndex: currentRundownIndex + 2,
+        nextTrackURI,
+        tempSongName,
+        tempBandName,
+        show,
+        user,
+        djId,
+        station,
+        chat,
+      })
+    }
+    return emitTalkSegment({
       jamSessionId,
-      currentRundownIndex + 2,
+      rundownIndex: currentRundownIndex + 2,
       nextTrackURI,
       tempSongName,
       tempBandName,
-      audioURI,
-      content.text
-    )
+      user,
+      djId,
+      station,
+      chat,
+      prompt,
+    })
+  }
 
-    return audioURI
+  if (nextSlot.type === 'transit') {
+    const prompt = await transitSegment({
+      name: user.profile.name || display_name,
+      nextTrackTitle: slotAfterNext.songName,
+      nextTrackArtist: slotAfterNext.bandName,
+    })
+    if (!prompt) {
+      return runSongFallback({
+        jamSessionId,
+        slot: slotAfterNext,
+        rundownIndex: currentRundownIndex + 2,
+        nextTrackURI,
+        tempSongName,
+        tempBandName,
+        show,
+        user,
+        djId,
+        station,
+        chat,
+      })
+    }
+    return emitTalkSegment({
+      jamSessionId,
+      rundownIndex: currentRundownIndex + 2,
+      nextTrackURI,
+      tempSongName,
+      tempBandName,
+      user,
+      djId,
+      station,
+      chat,
+      prompt,
+    })
   }
 }
 
+async function runSongFallback({
+  jamSessionId,
+  slot,
+  rundownIndex,
+  nextTrackURI,
+  tempSongName,
+  tempBandName,
+  show,
+  user,
+  djId,
+  station,
+  chat,
+}) {
+  const content = await createContent(
+    show.radioStation,
+    show.showName,
+    slot.songName,
+    slot.bandName,
+    show.date,
+    show.timeSlot,
+    user,
+    djId,
+    station,
+    chat
+  )
+  const audioURI = await convertFileToDataURI(content.filePath, content.format)
+  await saveToDb(
+    jamSessionId,
+    rundownIndex,
+    nextTrackURI,
+    tempSongName,
+    tempBandName,
+    audioURI,
+    content.text
+  )
+  return audioURI
+}
+
 module.exports = { showRunner }
+

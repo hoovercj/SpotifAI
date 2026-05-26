@@ -1,8 +1,8 @@
 function createDefaultShow() {
   return {
-    radioStation: "WYOU",
+    radioStation: "SpotifAI",
     showName: "Default Show",
-    date: "2023-09-01",
+    date: new Date().toISOString().slice(0, 10),
     rundown: [
       {
         type: "song",
@@ -33,6 +33,15 @@ function createDefaultShow() {
         albumName: null,
         duration: null,
       },
+      { type: "news" },
+      {
+        type: "song",
+        songName: null,
+        bandName: null,
+        albumName: null,
+        duration: null,
+      },
+      { type: "transit" },
       {
         type: "song",
         songName: null,
@@ -60,3 +69,4 @@ function createDefaultShow() {
 }
 
 module.exports = { createDefaultShow };
+

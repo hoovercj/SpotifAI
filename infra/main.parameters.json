@@ -1,0 +1,36 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "environmentName": {
+      "value": "${AZURE_ENV_NAME}"
+    },
+    "location": {
+      "value": "${AZURE_LOCATION}"
+    },
+    "postgresAdminPassword": {
+      "value": "$(secretOrRandomPassword)"
+    },
+    "googleApiKey": {
+      "value": "${GOOGLE_API_KEY}"
+    },
+    "spotifyClientId": {
+      "value": "${SPOTIFY_CLIENT_ID}"
+    },
+    "spotifyClientSecret": {
+      "value": "${SPOTIFY_CLIENT_SECRET}"
+    },
+    "sessionSecret": {
+      "value": "$(secretOrRandomPassword)"
+    },
+    "openWeatherApiKey": {
+      "value": "${OPEN_WEATHER_API_KEY=}"
+    },
+    "locationIqApiKey": {
+      "value": "${LOCATION_IQ_API_KEY=}"
+    },
+    "rejseplanenAccessId": {
+      "value": "${REJSEPLANEN_ACCESS_ID=}"
+    }
+  }
+}

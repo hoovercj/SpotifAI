@@ -6,3 +6,12 @@ package-lock.json
 public/main.js
 public/main.js.map
 .DS_Store
+
+# Generated TTS audio (runtime output from server/services/tts)
+server/public/audio/*.wav
+server/public/audio/*.mp3
+# Keep the upstream sample track that was committed before this rule
+!server/public/audio/Gimme Shelter*
+
+# Debug runtime state (rewritten by server/services/utl/debugTracker.js)
+debug/debugTracker.json

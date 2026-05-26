@@ -1,0 +1,134 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Start Dev",
+      "dependsOn": ["Dev: Server (npm)", "Chrome: Open Debug"],
+      "dependsOrder": "parallel",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": [],
+      "detail": "Brings Postgres up, runs the dev server (webpack --watch + nodemon), and launches Chrome with the SpotifAIDebug profile and remote-debugging on port 9222."
+    },
+    {
+      "label": "Dev: Server (npm)",
+      "type": "npm",
+      "script": "dev",
+      "dependsOn": ["Postgres: Up (Docker)"],
+      "dependsOrder": "sequence",
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "clear": true,
+        "echo": true,
+        "showReuseMessage": false
+      },
+      "problemMatcher": [],
+      "detail": "Brings Postgres up, then runs webpack --watch (client) and nodemon (server) in parallel via concurrently."
+    },
+    {
+      "label": "Build Production Bundle",
+      "type": "npm",
+      "script": "build:prod",
+      "group": "build",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      },
+      "problemMatcher": [],
+      "detail": "One-shot production webpack build of the client."
+    },
+    {
+      "label": "Postgres: Up (Docker)",
+      "type": "shell",
+      "command": "if ((docker ps -a --filter 'name=^spotifai-pg$' --format '{{.Names}}') -eq 'spotifai-pg') { docker start spotifai-pg | Out-Null } else { docker run -d --name spotifai-pg -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=spotifai -v spotifai-pg-data:/var/lib/postgresql/data -p 5432:5432 postgres:16 | Out-Null }; for ($i = 0; $i -lt 30; $i++) { docker exec spotifai-pg pg_isready -U postgres -d spotifai *> $null; if ($LASTEXITCODE -eq 0) { Write-Host 'Postgres ready'; exit 0 }; Start-Sleep -Milliseconds 500 }; Write-Error 'Postgres did not become ready within 15s'; exit 1",
+      "options": {
+        "shell": {
+          "executable": "pwsh.exe",
+          "args": ["-NoProfile", "-Command"]
+        }
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      },
+      "problemMatcher": [],
+      "detail": "Creates the spotifai-pg container if missing, starts it otherwise, then polls pg_isready until the DB accepts connections (up to 15s)."
+    },
+    {
+      "label": "Postgres: Stop (Docker)",
+      "type": "shell",
+      "command": "docker stop spotifai-pg",
+      "options": {
+        "shell": {
+          "executable": "pwsh.exe",
+          "args": ["-NoProfile", "-Command"]
+        }
+      },
+      "presentation": {
+        "reveal": "silent",
+        "panel": "shared"
+      },
+      "problemMatcher": [],
+      "detail": "Stops the spotifai-pg container (data survives in the volume)."
+    },
+    {
+      "label": "Postgres: Reset (Docker, destroys data)",
+      "type": "shell",
+      "command": "docker stop spotifai-pg 2>$null; docker rm spotifai-pg 2>$null; docker volume rm spotifai-pg-data 2>$null; Write-Host 'Container and data volume removed. Run \"Postgres: Up\" to recreate.'",
+      "options": {
+        "shell": {
+          "executable": "pwsh.exe",
+          "args": ["-NoProfile", "-Command"]
+        }
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      },
+      "problemMatcher": [],
+      "detail": "DESTRUCTIVE: removes the container AND the data volume. Use when you want a clean DB."
+    },
+    {
+      "label": "Docker: Force Restart",
+      "type": "shell",
+      "command": "Write-Host '=== Killing Docker processes ==='; Get-Process | Where-Object { $_.ProcessName -match 'docker|com\\.docker|vpnkit' } | ForEach-Object { Write-Host \"Stopping $($_.ProcessName) (PID $($_.Id))\"; try { Stop-Process -Id $_.Id -Force -ErrorAction Stop } catch { Write-Warning \"  Failed: $($_.Exception.Message)\" } }; Start-Sleep -Seconds 2; Write-Host '=== Shutting down WSL ==='; wsl --shutdown; Write-Host '=== Launching Docker Desktop ==='; $exe = 'C:\\Program Files\\Docker\\Docker\\Docker Desktop.exe'; if (-not (Test-Path $exe)) { Write-Error \"Docker Desktop not found at $exe\"; exit 1 }; Start-Process $exe; Write-Host 'Waiting up to 90s for engine to become responsive...'; for ($i = 0; $i -lt 45; $i++) { docker info *> $null; if ($LASTEXITCODE -eq 0) { Write-Host \"Docker engine ready after $($i*2)s.\"; exit 0 }; Start-Sleep -Seconds 2 }; Write-Error 'Docker engine did not become ready within 90s.'; exit 1",
+      "options": {
+        "shell": {
+          "executable": "pwsh.exe",
+          "args": ["-NoProfile", "-Command"]
+        }
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      },
+      "problemMatcher": [],
+      "detail": "Force-kills all Docker processes, shuts down WSL, relaunches Docker Desktop, and waits for the engine to become responsive. Use when Docker Desktop fails to appear in the tray."
+    },
+    {
+      "label": "Chrome: Open Debug",
+      "type": "shell",
+      "command": "& '${workspaceFolder}/.vscode/scripts/open-chrome-debug.ps1'",
+      "options": {
+        "shell": {
+          "executable": "pwsh.exe",
+          "args": ["-NoProfile", "-Command"]
+        }
+      },
+      "presentation": {
+        "reveal": "silent",
+        "panel": "shared",
+        "clear": true
+      },
+      "problemMatcher": [],
+      "detail": "Waits for http://localhost:3000, then launches Chrome with the SpotifAIDebug profile and --remote-debugging-port=9222. Skips if a debug Chrome is already running on that port. Logic lives in .vscode/scripts/open-chrome-debug.ps1."
+    }
+  ]
+}

@@ -1,24 +1,45 @@
-OPENAI_API_KEY=BlahBlahBlah
-ELEVENLABS_API_KEY=BlahBlahBlah
-OPEN_WEATHER_API_KEY=BlahBlahBlah
-LOCATION_IQ_API_KEY=BlahBlahBlah
+# --- Core ---
 PORT=3000
-DATABASE_URL=postgres://localhost/wyou-radio
+NODE_ENV=development
+SESSION_SECRET=change-me-to-a-long-random-string
+# Matches the spotifai-pg Docker container (Postgres: Up task)
+DATABASE_URL=postgres://postgres:postgres@localhost:5432/spotifai
 QUIET=TRUE
-SESSION_SECRET=BlahBlahBlah
-SPOTIFY_REDIRECT_URI_DEV=http://localhost:3000
-SPOTIFY_REDIRECT_URI_PROD=https://wyouradio.rev4labs.com
-SPOTIFY_CLIENT_ID=BlahBlahBlah
-SPOTIFY_CLIENT_SECRET=BlahBlahBlah
-LANGCHAIN_TRACING_V2=true
-LANGCHAIN_ENDPOINT=https://api.smith.langchain.com
-LANGCHAIN_API_KEY=BlahBlahBlah
-DOCKER_REGISTRY=awesome.registry.com
-DOCKER_IMAGE_NAME=wyouradio
 
+# --- Spotify (Premium account required for Web Playback SDK) ---
+SPOTIFY_CLIENT_ID=
+SPOTIFY_CLIENT_SECRET=
+SPOTIFY_REDIRECT_URI_DEV=http://127.0.0.1:3000
+SPOTIFY_REDIRECT_URI_PROD=https://your-app.azurecontainerapps.io
 
+# --- Google Gemini (LLM + TTS) ---
+# Get a key from https://aistudio.google.com/apikey
+GOOGLE_API_KEY=
 
+# --- LLM provider (optional overrides) ---
+# LLM_PROVIDER=gemini
+# GEMINI_TEXT_MODEL=gemini-2.5-flash
+# GEMINI_TEXT_TEMPERATURE=1.0
 
+# --- TTS provider (optional overrides) ---
+# TTS_PROVIDER=gemini
+# GEMINI_TTS_MODEL=gemini-2.5-flash-preview-tts
+# TTS_OUTPUT=wav
+
+# --- Weather + location (existing wyou features) ---
+OPEN_WEATHER_API_KEY=
+LOCATION_IQ_API_KEY=
+
+# --- News (Phase 6b) ---
+# Comma-separated list of locales to rotate through for news briefs.
+# Supported: dk, es, iowa
+NEWS_TOPIC_ROTATION=dk,es,iowa
+
+# --- Copenhagen transit (Phase 6b) ---
+# Set to "false" to disable the transit segment entirely.
+TRANSIT_ENABLED=true
+# Register for a free Rejseplanen access ID at https://www.rejseplanen.dk/labs/
+REJSEPLANEN_ACCESS_ID=
 
 
 

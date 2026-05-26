@@ -1,7 +1,7 @@
 import React from 'react'
 import Modal from 'react-bootstrap/Modal'
 import { connect } from 'react-redux'
-import { showProfile, hideProfile, clearUser } from '../store/userSlice'
+import { showProfile, hideProfile, logoutUser } from '../store/userSlice'
 import { Formik, Field, ErrorMessage } from 'formik'
 import Form from 'react-bootstrap/Form'
 import * as Yup from 'yup'
@@ -142,7 +142,7 @@ const mapDispatchToProps = (dispatch) => ({
   showProfile: () => dispatch(showProfile()),
   hideProfile: () => dispatch(hideProfile()),
   updateProfile: (profile) => dispatch(updateProfile(profile)),
-  logout: () => clearUser(),
+  logout: () => dispatch(logoutUser()),
 })
 
 export default connect(mapStateToProps, mapDispatchToProps)(UserProfile)

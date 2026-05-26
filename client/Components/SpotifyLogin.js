@@ -7,7 +7,16 @@ const spotifyRedirect =
     ? process.env.SPOTIFY_REDIRECT_URI_PROD
     : process.env.SPOTIFY_REDIRECT_URI_DEV
 
-const AUTH_URL = `https://accounts.spotify.com/authorize?client_id=${process.env.SPOTIFY_CLIENT_ID}&response_type=code&redirect_uri=${spotifyRedirect}&scope=streaming%20user-read-email%20user-read-private%20user-library-read%20user-library-modify%20user-read-playback-state%20user-modify-playback-state`
+// `playlist-read-private` and `playlist-read-collaborative` are required for
+// `/v1/me/playlists` to return private/collaborative playlists; without them
+// Spotify replies 403.
+//
+// We deliberately omit `show_dialog=true` so that returning users who have
+// already consented to the app are signed in silently (Spotify just redirects
+// back with a fresh `code`). If you need to force the account-picker (e.g.
+// when debugging an account-mismatch / Dev-Mode allowlist issue), re-add
+// `&show_dialog=true` below.
+const AUTH_URL = `https://accounts.spotify.com/authorize?client_id=${process.env.SPOTIFY_CLIENT_ID}&response_type=code&redirect_uri=${spotifyRedirect}&scope=streaming%20user-read-email%20user-read-private%20user-library-read%20user-library-modify%20user-read-playback-state%20user-modify-playback-state%20playlist-read-private%20playlist-read-collaborative`
 
 export default function SpotifyLogin() {
   return (
@@ -50,7 +59,7 @@ export default function SpotifyLogin() {
               <br />
               <span className="ms-3">💻</span>
               <Card.Link
-                href="https://github.com/chrisallenarmbruster/wyou-radio"
+                href="https://github.com/hoovercj/SpotifAI"
                 className="text-warning ms-2"
               >
                 Source Code on GitHub

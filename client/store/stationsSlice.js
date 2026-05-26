@@ -59,22 +59,43 @@ export const {
   clearCurrentStation,
 } = stationsSlice.actions
 
+// Pull a plain-string error message out of a SpotifyWebApi / fetch / generic
+// error so we can put it into Redux state without triggering RTK's
+// non-serializable warning.
+const toErrorMessage = (error) =>
+  error?.body?.error?.message ??
+  error?.message ??
+  (typeof error === 'string' ? error : 'Unknown error')
+
 export const fetchStations = (uriArray) => async (dispatch, getState) => {
   try {
     if (!getState().user.details.accessToken) return
     dispatch(setStationsLoading(true))
 
     spotifyApi.setAccessToken(getState().user.details.accessToken)
-    const stationArray = await Promise.all(
-      uriArray.map(async (uri) => {
-        const res = await spotifyApi.getPlaylist(uri)
-        return res.body
-      })
+    // Fetch each playlist independently so one missing/forbidden ID doesn't
+    // tank the whole batch. Spotify deprecated editorial playlists for
+    // Dev-Mode apps in Nov 2024, so 404s on `37i9dQZF1...` IDs are expected
+    // and should be skipped rather than surfaced as an error.
+    const results = await Promise.allSettled(
+      uriArray.map((uri) => spotifyApi.getPlaylist(uri))
     )
 
-    dispatch(addStations(stationArray))
+    const stationArray = []
+    results.forEach((result, idx) => {
+      if (result.status === 'fulfilled') {
+        stationArray.push(result.value.body)
+      } else {
+        console.warn(
+          `fetchStations: skipped playlist ${uriArray[idx]}:`,
+          toErrorMessage(result.reason)
+        )
+      }
+    })
+
+    if (stationArray.length > 0) dispatch(addStations(stationArray))
   } catch (error) {
-    dispatch(setStationsError(error))
+    dispatch(setStationsError(toErrorMessage(error)))
   } finally {
     dispatch(setStationsLoading(false))
   }
@@ -89,7 +110,7 @@ export const fetchStation = (uri) => async (dispatch, getState) => {
     const res = await spotifyApi.getPlaylist(uri)
     dispatch(addStation(res.body))
   } catch (error) {
-    dispatch(setStationsError(error))
+    dispatch(setStationsError(toErrorMessage(error)))
   } finally {
     dispatch(setStationsLoading(false))
   }
@@ -104,7 +125,7 @@ export const setCurrentStationByUri = (uri) => async (dispatch, getState) => {
     const res = await spotifyApi.getPlaylist(uri)
     dispatch(setCurrentStation(res.body))
   } catch (error) {
-    dispatch(setStationsError(error))
+    dispatch(setStationsError(toErrorMessage(error)))
   } finally {
     dispatch(setStationsLoading(false))
   }
@@ -119,7 +140,7 @@ export const fetchUserStations = () => async (dispatch, getState) => {
     const res = await spotifyApi.getUserPlaylists()
     dispatch(addStations(res.body.items))
   } catch (error) {
-    dispatch(setStationsError(error))
+    dispatch(setStationsError(toErrorMessage(error)))
   } finally {
     dispatch(setStationsLoading(false))
   }

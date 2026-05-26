@@ -6,6 +6,7 @@ const Settings = require("./Settings")
 const JamSession = require("./JamSession")
 const JamSessionTracks = require("./JamSessionTracks")
 const Tracks = require("./Tracks")
+const SeenArticle = require("./SeenArticle")
 
 User.hasOne(Profile, {
   foreignKey: "userEmail",
@@ -50,4 +51,5 @@ module.exports = {
   User,
   JamSession,
   Profile,
+  SeenArticle,
 }

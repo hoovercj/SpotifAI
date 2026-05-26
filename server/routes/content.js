@@ -5,17 +5,31 @@ const { User, Profile } = require('../db/index.js')
 const { djCharacters } = require('../services/djCharacters')
 const { showRunner } = require('../services/rundown/showRunner')
 const { reset } = require('../services/rundown/rundownUtlities/dbUtilities')
-const establishChat = require('../services/establishChat')
-let flag = false
-let chain
+const { createChatSession } = require('../services/llm')
+const { buildDJSystemPrompt } = require('../services/llm/buildDJSystemPrompt')
+
+// Per-(jamSession, dj) chat sessions. Keyed so each DJ keeps an independent
+// conversation history within a single listening session, and multiple
+// concurrent jam sessions don't collide.
+const chatSessions = new Map()
+async function getOrCreateChat(jamSessionId, djId) {
+  const key = `${jamSessionId}::${djId}`
+  if (!chatSessions.has(key)) {
+    const persona = await djCharacters(djId)
+    const systemInstruction = buildDJSystemPrompt(persona)
+    chatSessions.set(
+      key,
+      await createChatSession({ systemInstruction, sessionId: key })
+    )
+  }
+  return chatSessions.get(key)
+}
+
 const getLatLonFromZip = require('../services/locationIQ')
 
 router.post('/next-content', async (req, res) => {
   const { curTrack, nextTrack, jamSessionId, djId, station } = req.body
-  if (!flag) {
-    chain = await establishChat(jamSessionId)
-    flag = true
-  }
+  const chat = await getOrCreateChat(jamSessionId, djId)
 
   const userEmail = req.session.email
   //TODO: Update to use djId from req.body
@@ -80,7 +94,7 @@ router.post('/next-content', async (req, res) => {
     user,
     djId,
     station,
-    chain
+    chat
   )
   res.json(content)
 })
@@ -90,10 +104,10 @@ router.post('/reset', (req, res) => {
   res.send('Rundown index reset!')
 })
 
-router.get('/dj-characters/:djId', (req, res) => {
+router.get('/dj-characters/:djId', async (req, res) => {
   const djId = req.params.djId
 
-  const characterDetails = djCharacters(djId)
+  const characterDetails = await djCharacters(djId)
 
   if (characterDetails) {
     res.json(characterDetails)

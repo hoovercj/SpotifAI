@@ -15,6 +15,20 @@ import 'swiper/swiper-bundle.css'
 import { setJamSessionId } from '../store/jamSessionSlice'
 import './stationsStyle.css'
 
+// Spotify's `/me/playlists` returns `images: null` (or an empty array) for
+// playlists with no custom cover. Pick a usable URL or fall back to an inline
+// SVG placeholder so the slide still renders and stays clickable.
+const PLACEHOLDER_COVER =
+  'data:image/svg+xml;utf8,' +
+  encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 300">' +
+      '<rect fill="#282828" width="300" height="300"/>' +
+      '<text x="50%" y="50%" font-family="sans-serif" font-size="20" fill="#b3b3b3" text-anchor="middle" dominant-baseline="middle">No Cover</text>' +
+      '</svg>'
+  )
+
+const getStationCover = (station) => station?.images?.[0]?.url || PLACEHOLDER_COVER
+
 export function Stations(props) {
   const {
     stations,
@@ -90,7 +104,8 @@ export function Stations(props) {
               stations.map((station) => (
                 <SwiperSlide key={station.id}>
                   <img
-                    src={station.images[0].url}
+                    src={getStationCover(station)}
+                    alt={station.name || 'Playlist cover'}
                     onClick={() => {
                       // pauseSpotify()
                       clearCurrentTrack()

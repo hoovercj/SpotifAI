@@ -7,6 +7,10 @@ const initialState = {
   profile: null,
   showProfile: false,
   useBackendApis: true,
+  // True until the initial /api/spotify/session probe finishes. The login
+  // screen is suppressed while this is true so the UI doesn't flash the
+  // "Login With Spotify" card on every page-load for already-signed-in users.
+  sessionLoading: true,
 }
 
 const userSlice = createSlice({
@@ -18,6 +22,7 @@ const userSlice = createSlice({
     },
     clearUser: (state) => {
       state.details = null
+      state.profile = null
     },
     setCode: (state, action) => {
       state.code = action.payload
@@ -37,6 +42,9 @@ const userSlice = createSlice({
     toggleUseBackendApis: (state) => {
       state.useBackendApis = !state.useBackendApis
     },
+    setSessionLoading: (state, action) => {
+      state.sessionLoading = action.payload
+    },
   },
 })
 
@@ -49,6 +57,7 @@ export const {
   showProfile,
   hideProfile,
   toggleUseBackendApis,
+  setSessionLoading,
 } = userSlice.actions
 
 export const fetchProfile = () => async (dispatch) => {
@@ -68,6 +77,37 @@ export const updateProfile = (profile) => async (dispatch) => {
   } catch (err) {
     console.log(err)
   }
+}
+
+// Hydrate Redux from an existing server-side session on app startup. The
+// server returns 401 when there is no usable session (or the refresh token has
+// been revoked), in which case we just leave the store empty so the login
+// screen renders.
+export const restoreSession = () => async (dispatch) => {
+  try {
+    const { data } = await axios.get('/api/spotify/session')
+    const { profile, ...details } = data
+    dispatch(setUser(details))
+    if (profile) dispatch(setProfile(profile))
+  } catch (err) {
+    if (err?.response?.status !== 401) {
+      console.warn('restoreSession failed:', err?.response?.status, err?.message)
+    }
+  } finally {
+    dispatch(setSessionLoading(false))
+  }
+}
+
+// Destroy the server session, then clear local state. Done in that order so a
+// network failure leaves the user visibly signed in (rather than locked out
+// client-side with a stale cookie still being respected by the server).
+export const logoutUser = () => async (dispatch) => {
+  try {
+    await axios.post('/api/spotify/logout')
+  } catch (err) {
+    console.warn('Server logout failed:', err?.response?.status, err?.message)
+  }
+  dispatch(clearUser())
 }
 
 export default userSlice.reducer
