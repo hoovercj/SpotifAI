@@ -6,6 +6,7 @@ import userReducer from "./userSlice"
 import stationsReducer from "./stationsSlice"
 import djsReducer from "./djsSlice"
 import libraryReducer from "./librarySlice"
+import searchReducer from "./searchSlice"
 
 const loggerMiddleware = createLogger({
   collapsed: true,
@@ -20,6 +21,7 @@ const store = configureStore({
     stations: stationsReducer,
     djs: djsReducer,
     library: libraryReducer,
+    search: searchReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware().concat(loggerMiddleware),
