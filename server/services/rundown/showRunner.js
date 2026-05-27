@@ -8,6 +8,7 @@ const {
 const { saveToDb, reset } = require('../rundown/rundownUtlities/dbUtilities')
 const currentWeather = require('../currentWeather')
 const historySegment = require('../historySegment')
+const { musicFactsSegment } = require('../musicFacts')
 const { newsSegment } = require('../news')
 const { transitSegment } = require('../transit/copenhagen')
 const { convertFileToDataURI } = require('../utl/convertMP3FileToDataURI')
@@ -127,6 +128,44 @@ async function showRunner(userEmail, jamSessionId, user, djId, station, chat) {
       tempSongName,
       tempBandName,
       user: display_name,
+      djId,
+      station,
+      chat,
+      prompt,
+    })
+  }
+
+  if (nextSlot.type === 'musicFact') {
+    // Grounded "behind the song" segment — pulls facts from
+    // MusicBrainz + Wikipedia. If neither source returns anything we
+    // gracefully degrade to a plain song intro for the upcoming track.
+    const prompt = await musicFactsSegment({
+      name: user.profile.name || display_name,
+      nextTrackTitle: slotAfterNext.songName,
+      nextTrackArtist: slotAfterNext.bandName,
+    })
+    if (!prompt) {
+      return runSongFallback({
+        jamSessionId,
+        slot: slotAfterNext,
+        rundownIndex: currentRundownIndex + 2,
+        nextTrackURI,
+        tempSongName,
+        tempBandName,
+        show,
+        user,
+        djId,
+        station,
+        chat,
+      })
+    }
+    return emitTalkSegment({
+      jamSessionId,
+      rundownIndex: currentRundownIndex + 2,
+      nextTrackURI,
+      tempSongName,
+      tempBandName,
+      user,
       djId,
       station,
       chat,

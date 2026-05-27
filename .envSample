@@ -18,12 +18,12 @@ GOOGLE_API_KEY=
 
 # --- LLM provider (optional overrides) ---
 # LLM_PROVIDER=gemini
-# GEMINI_TEXT_MODEL=gemini-2.5-flash
+# GEMINI_TEXT_MODEL=gemini-3.1-flash
 # GEMINI_TEXT_TEMPERATURE=1.0
 
 # --- TTS provider (optional overrides) ---
 # TTS_PROVIDER=gemini
-# GEMINI_TTS_MODEL=gemini-2.5-flash-preview-tts
+# GEMINI_TTS_MODEL=gemini-3.1-flash-tts
 # TTS_OUTPUT=wav
 
 # --- Weather + location (existing wyou features) ---

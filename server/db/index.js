@@ -7,6 +7,9 @@ const JamSession = require("./JamSession")
 const JamSessionTracks = require("./JamSessionTracks")
 const Tracks = require("./Tracks")
 const SeenArticle = require("./SeenArticle")
+const AIStation = require("./AIStation")
+const RecentSession = require("./RecentSession")
+const UserDjPreference = require("./UserDjPreference")
 
 User.hasOne(Profile, {
   foreignKey: "userEmail",
@@ -46,10 +49,36 @@ JamSessionTracks.belongsTo(JamSession, {
   foreignKey: "jamSessionId",
 })
 
+User.hasMany(RecentSession, {
+  foreignKey: "userEmail",
+  sourceKey: "email",
+  onDelete: "CASCADE",
+})
+
+RecentSession.belongsTo(User, {
+  foreignKey: "userEmail",
+  targetKey: "email",
+})
+
+User.hasMany(UserDjPreference, {
+  foreignKey: "userEmail",
+  sourceKey: "email",
+  onDelete: "CASCADE",
+})
+
+UserDjPreference.belongsTo(User, {
+  foreignKey: "userEmail",
+  targetKey: "email",
+})
+
 module.exports = {
   syncAndSeed,
   User,
   JamSession,
   Profile,
+  Settings,
   SeenArticle,
+  AIStation,
+  RecentSession,
+  UserDjPreference,
 }

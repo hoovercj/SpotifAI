@@ -5,12 +5,14 @@ import { Skeleton } from "@/Components/ui/skeleton"
 import ScrollableRow from "../shell/ScrollableRow"
 import GenreStationTile from "./GenreStationTile"
 import GENRES from "./genres"
-import { useSpotifyPlayer } from "../player/useSpotifyPlayer"
+import MOODS from "./moods"
+import { useStartSession } from "../player/useStartSession"
 import {
   fetchRecentlyPlayed,
   fetchTopArtists,
   fetchTopTracks,
 } from "../../store/librarySlice"
+import { fetchRecentSessions } from "../../store/recentSessionsSlice"
 
 function pickImage(item) {
   if (item?.album?.images?.[0]?.url) return item.album.images[0].url
@@ -38,49 +40,124 @@ function uniqByUri(items) {
   return out
 }
 
+/**
+ * Home screen.
+ *
+ * Layout (top → bottom):
+ *   1. Recent sessions row — cross-device "jump back in" tiles from
+ *      the server-backed `recent_session` table. Only renders if the
+ *      user has at least one prior session.
+ *   2. Discover — recent Spotify plays, top artists, top tracks. Each
+ *      tap starts a brand-new SpotifAI session seeded from the item.
+ *   3. Radio — gradient tiles. Stations (genres) route to the genre
+ *      detail page so the user can pick a specific AI station. Mood
+ *      tiles start a mood session directly (there's no per-mood detail
+ *      page — the mood itself is the seed).
+ *   4. Playlists — the user's Spotify playlists, each starts a
+ *      playlist-seeded session.
+ *
+ * Every interactive tile routes through `useStartSession` so the
+ * loading / intro / tracks pipeline is consistent regardless of seed
+ * type. The only exception is genre tiles, which navigate to /search
+ * (a browse affordance, not a play action).
+ */
 export default function HomeTab() {
   const dispatch = useDispatch()
-  const { playTracks, playContext } = useSpotifyPlayer()
+  const { start } = useStartSession()
 
   const profileName = useSelector((s) => s.user?.profile?.name)
-  const playlists = useSelector((s) => s.stations?.allStations || [])
+  const playlists = useSelector((s) => s.spotifyPlaylists?.allPlaylists || [])
   const recentlyPlayed = useSelector((s) => s.library.recentlyPlayed)
   const topArtistsShort = useSelector((s) => s.library.topArtists.short_term)
   const topTracksLong = useSelector((s) => s.library.topTracks.long_term)
+  const recentSessions = useSelector((s) => s.recentSessions.items)
 
   useEffect(() => {
     dispatch(fetchRecentlyPlayed())
     dispatch(fetchTopArtists("short_term"))
     dispatch(fetchTopTracks("long_term"))
+    dispatch(fetchRecentSessions())
   }, [dispatch])
 
   const recentTracks = useMemo(
     () => uniqByUri(recentlyPlayed.items).slice(0, 18),
     [recentlyPlayed.items]
   )
-  const quickTiles = recentTracks.slice(0, 6)
 
-  const playTrack = (track) => {
-    if (track?.uri) playTracks([track.uri])
+  // --- session-start handlers ----------------------------------------
+  // Each tap derives a seed shape the server orchestrator understands.
+  // tuningOverride passes through name + image so NowPlayingBar can
+  // paint the tuning state with the same artwork the tile showed.
+  const startTrackSession = (track) => {
+    if (!track?.id) return
+    start(
+      { type: "track", trackId: track.id },
+      {
+        tuningOverride: {
+          name: track.name,
+          image: pickImage(track),
+        },
+      }
+    )
   }
-  const playArtist = (artist) => {
-    if (artist?.uri)
-      playContext({
-        type: "artist",
-        uri: artist.uri,
-        name: artist.name,
-        image: pickImage(artist),
-      })
+
+  const startArtistSession = (artist) => {
+    if (!artist?.id) return
+    start(
+      { type: "artist", artistId: artist.id },
+      {
+        tuningOverride: {
+          name: `${artist.name} Radio`,
+          image: pickImage(artist),
+        },
+      }
+    )
   }
-  const playPlaylist = (pl) => {
-    if (pl?.uri)
-      playContext({
-        type: "playlist",
-        uri: pl.uri,
-        name: pl.name,
-        image: pickImage(pl),
-      })
+
+  const startMoodSession = (mood) => {
+    start(
+      { type: "mood", moodId: mood.id },
+      {
+        tuningOverride: {
+          name: mood.name,
+          gradient: [mood.from, mood.to],
+        },
+      }
+    )
   }
+
+  const startPlaylistSession = (pl) => {
+    // Server accepts either spotifyUri or playlistId — sending the URI
+    // matches what the Spotify API itself returns and is what the
+    // existing recent_session rows store.
+    if (!pl?.uri) return
+    start(
+      { type: "playlist", spotifyUri: pl.uri },
+      {
+        tuningOverride: {
+          name: pl.name,
+          image: pickImage(pl),
+        },
+      }
+    )
+  }
+
+  const startRecentSession = (item) => {
+    if (!item?.seed) return
+    start(item.seed, {
+      tuningOverride: {
+        name: item.name,
+        image: item.imageUrl,
+      },
+    })
+  }
+
+  const isFirstPaintEmpty =
+    recentTracks.length === 0 &&
+    topArtistsShort.items.length === 0 &&
+    topTracksLong.items.length === 0 &&
+    playlists.length === 0 &&
+    recentSessions.length === 0
 
   return (
     <div className="flex flex-col gap-6 pt-4 pb-2">
@@ -91,41 +168,29 @@ export default function HomeTab() {
         </h1>
       </header>
 
-      {/* Quick grid */}
-      {(quickTiles.length > 0 || recentlyPlayed.loading) && (
-        <section className="grid grid-cols-2 gap-2 px-4">
-          {quickTiles.length === 0
-            ? Array.from({ length: 6 }).map((_, i) => (
-                <Skeleton key={i} className="h-14 w-full rounded-lg" />
-              ))
-            : quickTiles.map((track) => (
-                <button
-                  key={track.uri}
-                  type="button"
-                  onClick={() => playTrack(track)}
-                  className="group flex h-14 items-center gap-2 overflow-hidden rounded-lg bg-muted/40 pr-2 text-left transition-colors hover:bg-muted"
-                >
-                  <div className="h-14 w-14 shrink-0 overflow-hidden bg-muted">
-                    {pickImage(track) && (
-                      <img
-                        src={pickImage(track)}
-                        alt=""
-                        className="h-full w-full object-cover"
-                      />
-                    )}
-                  </div>
-                  <span className="line-clamp-2 flex-1 text-xs font-medium">
-                    {track.name}
-                  </span>
-                </button>
-              ))}
-        </section>
+      {/* ===== Recent sessions (server-backed, cross-device) ===== */}
+      {recentSessions.length > 0 && (
+        <ScrollableRow
+          title="Jump back into a SpotifAI session"
+          subtitle="Picks up where you left off, on any device"
+        >
+          {recentSessions.map((item) => (
+            <PosterTile
+              key={item.seedKey}
+              image={item.imageUrl}
+              fallbackGradient={fallbackGradientFor(item.seed)}
+              title={item.name}
+              subtitle={seedSubtitle(item.seed)}
+              onClick={() => startRecentSession(item)}
+            />
+          ))}
+        </ScrollableRow>
       )}
 
-      {/* Jump back in */}
+      {/* ===== Discover (your own Spotify history) ===== */}
       {recentTracks.length > 0 && (
-        <ScrollableRow title="Jump back in">
-          {recentTracks.slice(6).map((track) => (
+        <ScrollableRow title="Jump back in" subtitle="From your Spotify history">
+          {recentTracks.map((track) => (
             <PosterTile
               key={track.uri}
               image={pickImage(track)}
@@ -135,17 +200,16 @@ export default function HomeTab() {
                   ? track.artists.map((a) => a.name).join(", ")
                   : ""
               }
-              onClick={() => playTrack(track)}
+              onClick={() => startTrackSession(track)}
             />
           ))}
         </ScrollableRow>
       )}
 
-      {/* Top artists this month */}
       {topArtistsShort.items.length > 0 && (
         <ScrollableRow
           title="Your top artists this month"
-          subtitle="Based on your Spotify listening"
+          subtitle="Tap to start an artist radio"
         >
           {topArtistsShort.items.map((artist) => (
             <PosterTile
@@ -154,17 +218,16 @@ export default function HomeTab() {
               title={artist.name}
               subtitle="Artist"
               rounded
-              onClick={() => playArtist(artist)}
+              onClick={() => startArtistSession(artist)}
             />
           ))}
         </ScrollableRow>
       )}
 
-      {/* Top tracks all time */}
       {topTracksLong.items.length > 0 && (
         <ScrollableRow
           title="Your top tracks of all time"
-          subtitle="Long-term Spotify favorites"
+          subtitle="Tap to spin a session around this song"
         >
           {topTracksLong.items.map((track) => (
             <PosterTile
@@ -176,20 +239,34 @@ export default function HomeTab() {
                   ? track.artists.map((a) => a.name).join(", ")
                   : ""
               }
-              onClick={() => playTrack(track)}
+              onClick={() => startTrackSession(track)}
             />
           ))}
         </ScrollableRow>
       )}
 
-      {/* Stations (genres) */}
+      {/* ===== Radio (gradient browse tiles) ===== */}
       <ScrollableRow title="Stations" subtitle="Browse by genre">
         {GENRES.map((g) => (
+          // No onClick override — genre tiles route to /search where
+          // the user can pick a specific AI station from the list.
           <GenreStationTile key={g.id} genre={g} />
         ))}
       </ScrollableRow>
 
-      {/* Your playlists */}
+      <ScrollableRow title="Moods & activities" subtitle="Browse by vibe">
+        {MOODS.map((m) => (
+          // Mood tiles start a session directly — there's no per-mood
+          // detail screen to drill into, the mood *is* the seed.
+          <GenreStationTile
+            key={m.id}
+            genre={m}
+            onClick={() => startMoodSession(m)}
+          />
+        ))}
+      </ScrollableRow>
+
+      {/* ===== Your playlists ===== */}
       {playlists.length > 0 && (
         <ScrollableRow title="Your playlists">
           {playlists.map((pl) => (
@@ -198,43 +275,59 @@ export default function HomeTab() {
               image={pickImage(pl)}
               title={pl.name}
               subtitle={pl.owner?.display_name || "Playlist"}
-              onClick={() => playPlaylist(pl)}
+              onClick={() => startPlaylistSession(pl)}
             />
           ))}
         </ScrollableRow>
       )}
 
       {/* Loading placeholder for first paint */}
-      {recentTracks.length === 0 &&
-        topArtistsShort.items.length === 0 &&
-        topTracksLong.items.length === 0 &&
-        playlists.length === 0 && (
-          <ScrollableRow title="Loading your library">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className="flex w-36 flex-col gap-2">
-                <Skeleton className="aspect-square w-36 rounded-lg" />
-                <Skeleton className="h-3 w-3/4" />
-                <Skeleton className="h-3 w-1/2" />
-              </div>
-            ))}
-          </ScrollableRow>
-        )}
+      {isFirstPaintEmpty && (
+        <ScrollableRow title="Loading your library">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="flex w-28 flex-col gap-2">
+              <Skeleton className="aspect-square w-28 rounded-lg" />
+              <Skeleton className="h-3 w-3/4" />
+              <Skeleton className="h-3 w-1/2" />
+            </div>
+          ))}
+        </ScrollableRow>
+      )}
     </div>
   )
 }
 
-function PosterTile({ image, title, subtitle, onClick, rounded }) {
+// ---------------------------------------------------------------------
+// Tile components
+// ---------------------------------------------------------------------
+
+function PosterTile({
+  image,
+  title,
+  subtitle,
+  onClick,
+  rounded,
+  fallbackGradient,
+}) {
+  const showGradient = !image && fallbackGradient
   return (
     <button
       type="button"
       onClick={onClick}
-      className="group flex w-36 flex-col items-start text-left"
+      className="group flex w-28 flex-col items-start text-left"
     >
       <div
         className={cn(
-          "relative aspect-square w-36 overflow-hidden bg-muted shadow-md shadow-black/40",
+          "relative aspect-square w-28 overflow-hidden bg-muted shadow-md shadow-black/40",
           rounded ? "rounded-full" : "rounded-lg"
         )}
+        style={
+          showGradient
+            ? {
+                backgroundImage: `linear-gradient(135deg, ${fallbackGradient[0]}, ${fallbackGradient[1]})`,
+              }
+            : undefined
+        }
       >
         {image && (
           <img
@@ -244,12 +337,53 @@ function PosterTile({ image, title, subtitle, onClick, rounded }) {
           />
         )}
       </div>
-      <p className="mt-2 line-clamp-1 w-full text-sm font-medium">{title}</p>
+      <p className="mt-1.5 line-clamp-1 w-full text-xs font-medium">{title}</p>
       {subtitle && (
-        <p className="line-clamp-1 w-full text-xs text-muted-foreground">
+        <p className="line-clamp-1 w-full text-[10px] text-muted-foreground">
           {subtitle}
         </p>
       )}
     </button>
   )
+}
+
+// Subtitle helper for recent session tiles — gives them a sense of "what
+// kind of session this is" without needing to render a separate badge.
+function seedSubtitle(seed) {
+  if (!seed) return ""
+  switch (seed.type) {
+    case "station":
+      return "AI Station"
+    case "mood":
+      return "Mood"
+    case "track":
+      return "Song radio"
+    case "artist":
+      return "Artist radio"
+    case "playlist":
+      return "Playlist"
+    default:
+      return "Session"
+  }
+}
+
+// When a recent session has no cover art (mood/track/station seeds may
+// arrive without one), fall back to a per-type gradient swatch so the
+// row doesn't render gray squares.
+function fallbackGradientFor(seed) {
+  if (!seed) return ["#475569", "#1e293b"]
+  switch (seed.type) {
+    case "station":
+      return ["#a855f7", "#ec4899"]
+    case "mood":
+      return ["#0ea5e9", "#6366f1"]
+    case "track":
+      return ["#f59e0b", "#dc2626"]
+    case "artist":
+      return ["#10b981", "#0d9488"]
+    case "playlist":
+      return ["#8b5cf6", "#1e40af"]
+    default:
+      return ["#475569", "#1e293b"]
+  }
 }

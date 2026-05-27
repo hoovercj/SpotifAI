@@ -7,15 +7,28 @@ import { Input } from "@/Components/ui/input"
 import { Skeleton } from "@/Components/ui/skeleton"
 import {
   clearResults,
+  fetchNextPage,
   pushRecent,
   removeRecent,
-  searchAll,
+  SEARCH_TYPES,
+  setActiveType,
   setQuery as setQueryAction,
 } from "../../store/searchSlice"
 import { useSpotifyPlayer } from "../player/useSpotifyPlayer"
 import BrowseAllGrid from "./BrowseAllGrid"
+import AIStationsRow from "./AIStationsRow"
+import { stationsForQuery } from "./aiStations"
 
 const DEBOUNCE_MS = 300
+
+const TYPE_LABELS = {
+  playlist: "Playlists",
+  track: "Songs",
+  artist: "Artists",
+  album: "Albums",
+  show: "Podcasts",
+  audiobook: "Audiobooks",
+}
 
 function pickImage(item) {
   if (item?.album?.images?.[0]?.url) return item.album.images[0].url
@@ -28,17 +41,38 @@ function artistList(item) {
   return ""
 }
 
+function subtitleFor(item, type) {
+  switch (type) {
+    case "track":
+      return `Song · ${artistList(item)}`
+    case "artist":
+      return "Artist"
+    case "album":
+      return `Album · ${artistList(item)}`
+    case "playlist":
+      return `Playlist · ${item?.owner?.display_name || ""}`
+    case "show":
+      return `Podcast · ${item?.publisher || ""}`
+    case "audiobook":
+      return "Audiobook"
+    default:
+      return ""
+  }
+}
+
 export default function SearchTab() {
   const dispatch = useDispatch()
   const navigate = useNavigate()
   const location = useLocation()
   const inputRef = useRef(null)
   const debounceRef = useRef(null)
+  const sentinelRef = useRef(null)
 
   const query = useSelector((s) => s.search?.query ?? "")
-  const loading = useSelector((s) => s.search?.loading)
-  const error = useSelector((s) => s.search?.error)
-  const results = useSelector((s) => s.search?.results)
+  const activeType = useSelector((s) => s.search?.activeType ?? "playlist")
+  const typeState = useSelector(
+    (s) => s.search?.byType?.[activeType] ?? null
+  )
   const recent = useSelector((s) => s.search?.recent ?? [])
   const accessToken = useSelector((s) => s.user?.details?.accessToken)
 
@@ -63,7 +97,9 @@ export default function SearchTab() {
     inputRef.current?.focus()
   }, [])
 
-  // Debounced search.
+  // Debounced first-page fetch for the active type. `fetchNextPage` is
+  // idempotent: it bails when the type is already loading or out of pages,
+  // so dispatching unconditionally is safe.
   useEffect(() => {
     window.clearTimeout(debounceRef.current)
     if (!accessToken) return
@@ -73,10 +109,44 @@ export default function SearchTab() {
       return
     }
     debounceRef.current = window.setTimeout(() => {
-      dispatch(searchAll(trimmed))
+      dispatch(fetchNextPage(activeType))
     }, DEBOUNCE_MS)
     return () => window.clearTimeout(debounceRef.current)
-  }, [query, accessToken, dispatch])
+    // We re-arm whenever query OR the active type changes — switching pills
+    // should lazy-load the first page for the newly-selected type.
+  }, [query, activeType, accessToken, dispatch])
+
+  // When the user picks a new pill that has no results yet, fetch its first
+  // page immediately (no debounce — they're explicitly asking for it).
+  useEffect(() => {
+    if (!accessToken) return
+    if (!query.trim()) return
+    if (!typeState) return
+    if (typeState.items.length > 0) return
+    if (typeState.loading) return
+    if (typeState.offset !== 0) return
+    dispatch(fetchNextPage(activeType))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeType])
+
+  // Infinite scroll: when the sentinel scrolls into view, fetch the next
+  // page for the currently active type.
+  useEffect(() => {
+    const node = sentinelRef.current
+    if (!node) return
+    if (!typeState?.hasMore) return
+    if (typeState?.loading) return
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          dispatch(fetchNextPage(activeType))
+        }
+      },
+      { rootMargin: "200px 0px" }
+    )
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [activeType, typeState?.hasMore, typeState?.loading, typeState?.items.length, dispatch])
 
   const handleQueryChange = (e) => {
     const next = e.target.value
@@ -123,6 +193,11 @@ export default function SearchTab() {
     inputRef.current?.focus()
   }
 
+  const handlePillClick = (type) => {
+    if (type === activeType) return
+    dispatch(setActiveType(type))
+  }
+
   const playTrack = (track) => {
     if (!track?.uri) return
     playTracks([track.uri])
@@ -139,20 +214,10 @@ export default function SearchTab() {
     dispatch(pushRecent(query.trim()))
   }
 
+  const stationsBundle = useMemo(() => stationsForQuery(query), [query])
+
   const showEmpty = !query.trim()
   const showRecent = isFocused && showEmpty && recent.length > 0
-  const hasAnyResults = useMemo(
-    () =>
-      Boolean(
-        results?.tracks?.length ||
-          results?.artists?.length ||
-          results?.albums?.length ||
-          results?.playlists?.length ||
-          results?.shows?.length ||
-          results?.audiobooks?.length
-      ),
-    [results]
-  )
 
   return (
     <div className="flex flex-col gap-4 pt-4 pb-2">
@@ -197,127 +262,116 @@ export default function SearchTab() {
             ))}
           </div>
         )}
+
+        {/* Pills — mirror Library tab; default selection is Playlists. */}
+        {!showEmpty && (
+          <div className="-mx-1 mt-3 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {SEARCH_TYPES.map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => handlePillClick(t)}
+                className={cn(
+                  "shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition-colors",
+                  activeType === t
+                    ? "bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white shadow-md shadow-fuchsia-900/30"
+                    : "bg-muted/60 text-muted-foreground hover:bg-muted"
+                )}
+              >
+                {TYPE_LABELS[t]}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Empty state */}
-      {showEmpty && !loading && <BrowseAllGrid />}
+      {showEmpty && <BrowseAllGrid />}
 
-      {/* Loading state */}
-      {!showEmpty && loading && <LoadingSkeletons />}
-
-      {/* Error */}
-      {!showEmpty && error && !loading && (
-        <div className="mx-4 rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-          {error}
-        </div>
+      {/* AI Stations row — only when the query matches a known genre */}
+      {!showEmpty && stationsBundle && (
+        <AIStationsRow
+          genreId={stationsBundle.genreId}
+          stations={stationsBundle.stations}
+        />
       )}
 
-      {/* Results */}
-      {!showEmpty && !loading && hasAnyResults && (
-        <div className="flex flex-col gap-6">
-          {results.tracks?.length > 0 && (
-            <Section title="Songs">
-              {results.tracks.map((t) => (
-                <ResultRow
-                  key={t.uri}
-                  image={pickImage(t)}
-                  title={t.name}
-                  subtitle={`Song · ${artistList(t)}`}
-                  onClick={() => playTrack(t)}
-                />
-              ))}
-            </Section>
-          )}
-          {results.artists?.length > 0 && (
-            <Section title="Artists">
-              {results.artists.map((a) => (
-                <ResultRow
-                  key={a.uri}
-                  image={pickImage(a)}
-                  title={a.name}
-                  subtitle="Artist"
-                  rounded
-                  onClick={() => playCtx(a, "artist")}
-                />
-              ))}
-            </Section>
-          )}
-          {results.albums?.length > 0 && (
-            <Section title="Albums">
-              {results.albums.map((a) => (
-                <ResultRow
-                  key={a.uri}
-                  image={pickImage(a)}
-                  title={a.name}
-                  subtitle={`Album · ${artistList(a)}`}
-                  onClick={() => playCtx(a, "album")}
-                />
-              ))}
-            </Section>
-          )}
-          {results.playlists?.length > 0 && (
-            <Section title="Playlists">
-              {results.playlists.map((p) => (
-                <ResultRow
-                  key={p.uri}
-                  image={pickImage(p)}
-                  title={p.name}
-                  subtitle={`Playlist · ${p.owner?.display_name || ""}`}
-                  onClick={() => playCtx(p, "playlist")}
-                />
-              ))}
-            </Section>
-          )}
-          {results.shows?.length > 0 && (
-            <Section title="Podcasts">
-              {results.shows.map((s) => (
-                <ResultRow
-                  key={s.uri}
-                  image={pickImage(s)}
-                  title={s.name}
-                  subtitle={`Podcast · ${s.publisher || ""}`}
-                  onClick={() => playCtx(s, "show")}
-                />
-              ))}
-            </Section>
-          )}
-          {results.audiobooks?.length > 0 && (
-            <Section title="Audiobooks">
-              {results.audiobooks.map((b) => (
-                <ResultRow
-                  key={b.uri}
-                  image={pickImage(b)}
-                  title={b.name}
-                  subtitle="Audiobook"
-                  onClick={() => playCtx(b, "audiobook")}
-                />
-              ))}
-            </Section>
-          )}
-        </div>
-      )}
-
-      {/* No results */}
-      {!showEmpty && !loading && !error && !hasAnyResults && (
-        <div className="mt-4 flex flex-col items-center gap-2 px-4 text-center">
-          <SearchIcon className="h-8 w-8 text-muted-foreground/50" />
-          <p className="text-sm font-medium">No results for &ldquo;{query}&rdquo;</p>
-          <p className="text-xs text-muted-foreground">
-            Try a different spelling or a more general term.
-          </p>
-        </div>
+      {/* Results list for the currently selected type */}
+      {!showEmpty && (
+        <ResultsList
+          type={activeType}
+          typeState={typeState}
+          onPlayTrack={playTrack}
+          onPlayContext={playCtx}
+          sentinelRef={sentinelRef}
+        />
       )}
     </div>
   )
 }
 
-function Section({ title, children }) {
+function ResultsList({ type, typeState, onPlayTrack, onPlayContext, sentinelRef }) {
+  const items = typeState?.items ?? []
+  const loading = typeState?.loading
+  const hasMore = typeState?.hasMore
+  const error = typeState?.error
+
+  const handleClick = (item) => {
+    if (type === "track") onPlayTrack(item)
+    else onPlayContext(item, type)
+  }
+
+  // First-page loading: render skeletons.
+  if (loading && items.length === 0) return <LoadingSkeletons />
+
+  // First page returned no results AND no more pages.
+  if (!loading && items.length === 0 && !error) {
+    return (
+      <div className="mt-4 flex flex-col items-center gap-2 px-4 text-center">
+        <SearchIcon className="h-8 w-8 text-muted-foreground/50" />
+        <p className="text-sm font-medium">No {TYPE_LABELS[type].toLowerCase()} found</p>
+        <p className="text-xs text-muted-foreground">
+          Try a different spelling or pick another category above.
+        </p>
+      </div>
+    )
+  }
+
   return (
     <section className="flex flex-col">
-      <h2 className="px-4 pb-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-        {title}
-      </h2>
-      <ul className="flex flex-col">{children}</ul>
+      <ul className="flex flex-col">
+        {items.map((item) => (
+          <ResultRow
+            key={item.uri}
+            image={pickImage(item)}
+            title={item.name}
+            subtitle={subtitleFor(item, type)}
+            rounded={type === "artist"}
+            onClick={() => handleClick(item)}
+          />
+        ))}
+      </ul>
+
+      {/* Sentinel + footer states */}
+      <div ref={sentinelRef} aria-hidden="true" />
+
+      {loading && items.length > 0 && (
+        <div className="grid place-items-center py-4">
+          <Skeleton className="h-3 w-24" />
+        </div>
+      )}
+
+      {!loading && !hasMore && items.length > 0 && (
+        <p className="py-4 text-center text-[11px] uppercase tracking-wider text-muted-foreground/70">
+          End of results
+        </p>
+      )}
+
+      {error && (
+        <div className="mx-4 mt-2 rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+          {error}
+        </div>
+      )}
     </section>
   )
 }
@@ -377,20 +431,15 @@ function RecentChip({ label, onSelect, onRemove }) {
 
 function LoadingSkeletons() {
   return (
-    <div className="flex flex-col gap-4 px-4">
-      {[0, 1].map((s) => (
-        <section key={s} className="flex flex-col gap-2">
-          <Skeleton className="h-3 w-24" />
-          {Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="flex items-center gap-3 py-2">
-              <Skeleton className="h-12 w-12 rounded-md" />
-              <div className="flex flex-1 flex-col gap-2">
-                <Skeleton className="h-3 w-2/3" />
-                <Skeleton className="h-3 w-1/3" />
-              </div>
-            </div>
-          ))}
-        </section>
+    <div className="flex flex-col gap-2 px-4">
+      {Array.from({ length: 6 }).map((_, i) => (
+        <div key={i} className="flex items-center gap-3 py-2">
+          <Skeleton className="h-12 w-12 rounded-md" />
+          <div className="flex flex-1 flex-col gap-2">
+            <Skeleton className="h-3 w-2/3" />
+            <Skeleton className="h-3 w-1/3" />
+          </div>
+        </div>
       ))}
     </div>
   )

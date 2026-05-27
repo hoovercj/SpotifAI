@@ -18,7 +18,14 @@
     "build": "cross-env NODE_ENV=production vite build",
     "build:prod": "cross-env NODE_ENV=production vite build",
     "preview": "vite preview",
-    "start": "cross-env NODE_ENV=production node server/index.js"
+    "start": "cross-env NODE_ENV=production node server/index.js",
+    "prompt": "node scripts/prompt-lab.js",
+    "smoke": "node scripts/smoke.js",
+    "seed:dj-avatars": "node scripts/seed-dj-avatars.js",
+    "eval": "promptfoo eval -c evals/promptfooconfig.yaml",
+    "eval:fresh": "promptfoo eval -c evals/promptfooconfig.yaml --no-cache",
+    "eval:promote": "node scripts/promote-eval.js",
+    "eval:view": "promptfoo view"
   },
   "keywords": [
     "ai-radio",
@@ -38,6 +45,7 @@
     "dotenv": "^16.4.0",
     "express": "^4.19.0",
     "express-session": "^1.18.0",
+    "nunjucks": "^3.2.4",
     "pg": "^8.11.5",
     "pino": "^9.0.0",
     "pino-pretty": "^11.0.0",
@@ -73,6 +81,7 @@
     "lucide-react": "^0.460.0",
     "nanoid": "^5.0.0",
     "nodemon": "^3.1.0",
+    "promptfoo": "^0.114.0",
     "react": "^18.3.1",
     "react-bootstrap": "^2.10.0",
     "react-dom": "^18.3.1",

@@ -1,6 +1,6 @@
 # SpotifAI
 
-An AI-powered personal radio station that turns your Spotify queue into a hosted broadcast. Four AI DJs introduce your tracks with local news, traffic, and weather, music history, and more.
+An AI-powered personal radio station that turns your Spotify queue into a hosted broadcast. A roster of 28 AI DJs spans every major genre and personality, introducing your tracks with local news, traffic, weather, music history, and grounded behind-the-song facts pulled from MusicBrainz and Wikipedia.
 
 Forked from [chrisallenarmbruster/wyou-radio](https://github.com/chrisallenarmbruster/wyou-radio); see [ATTRIBUTION.md](ATTRIBUTION.md).
 
@@ -11,15 +11,66 @@ Forked from [chrisallenarmbruster/wyou-radio](https://github.com/chrisallenarmbr
 ## What it does
 
 - Streams from your Spotify Premium account via the Web Playback SDK.
-- Wraps each track transition in a generated DJ break: song intros, weather, on-this-day music history, local news briefs, and traffic alerts.
-- Uses **Google Gemini** end-to-end
+- Wraps each track transition in a generated DJ break: song intros, weather, on-this-day music history, local news briefs, traffic alerts, and grounded "behind the song" facts (producer, label, release year, story-behind-the-song) sourced from MusicBrainz and Wikipedia.
+- Uses **Google Gemini** end-to-end.
+- Routes every session to a genre-appropriate host automatically (catalog/mood pin → LLM picker → fallback regex). The listener can override per-session, per-seed, or globally from the in-player Mic2 picker.
 
-  | DJ            | Style                            | Gemini voice |
-  | ------------- | -------------------------------- | ------------ |
-  | Rusty Maddox  | Gruff classic-rock biker uncle   | `Fenrir`     |
-  | M-Quake       | Sassy female pop / contemporary  | `Aoede`      |
-  | Nigel Windsor | Refined British classical        | `Charon`     |
-  | Lady Lyric    | Confident hip-hop / R&B female   | `Kore`       |
+### DJ roster (28 personas)
+
+Each DJ has a unique voice and a hand-tuned style. Catalog stations pin a DJ explicitly; mood/track/artist/playlist seeds are routed by an LLM picker (`server/services/sessions/pickDjWithLlm.js`) that reads the persona's `genres` + `djStyle` and chooses the best fit.
+
+| id | DJ                       | Voice            | Genres                                   |
+| -- | ------------------------ | ---------------- | ---------------------------------------- |
+| 1  | Rusty                    | `Algieba`        | rock, metal, punk, country, folk         |
+| 2  | M-Quake                  | `Autonoe`        | pop, indie, electronic, latin, kpop, anime, holiday, reggae |
+| 3  | Nigel                    | `Sadaltager`     | classical, jazz, stagescreen             |
+| 4  | Lady Lyric               | `Sulafat`        | hiphop, rnb, afrobeats, gospel, reggae   |
+| 5  | Saoirse                  | `Aoede`          | folk, indie                              |
+| 6  | Coda                     | `Despina`        | hiphop, rnb                              |
+| 7  | Yuki Tanaka              | `Leda`           | anime, kpop, pop                         |
+| 8  | Diego Ramírez            | `Iapetus`        | latin, hiphop                            |
+| 9  | Magnus Iverson           | `Charon`         | metal, punk                              |
+| 10 | Reverend Marcus Brown    | `Rasalgethi`     | gospel, rnb, soul                        |
+| 11 | Tomas Fischer            | `Orus`           | electronic                               |
+| 12 | Jade Park                | `Erinome`        | kpop, pop                                |
+| 13 | Hattie Lou Crawford      | `Vindemiatrix`   | country, folk                            |
+| 14 | Rio Solé                 | `Achernar`       | latin, electronic                        |
+| 15 | Liam O'Sullivan          | `Algenib`        | electronic, hiphop                       |
+| 16 | Beatrice "Bea" Lawson    | `Gacrux`         | jazz, rnb, soul                          |
+| 17 | Theo Marchetti           | `Achird`         | stagescreen, holiday, classical          |
+| 18 | Kwame Adebayo            | `Alnilam`        | afrobeats, hiphop                        |
+| 19 | Ziggy Cross              | `Schedar`        | indie, punk, rock                        |
+| 20 | Sister Aurelia           | `Pulcherrima`    | reggae, afrobeats                        |
+| 21 | Wren Holloway            | `Laomedeia`      | punk, indie, rock                        |
+| 22 | Henri Dubois             | `Zubenelgenubi`  | jazz, folk, blues                        |
+| 23 | Sterling Holt            | `Sadachbia`      | holiday, stagescreen, jazz               |
+| 24 | Aria Petros              | `Enceladus`      | classical, stagescreen                   |
+| 25 | Drey Mendoza             | `Callirhoe`      | rnb, pop                                 |
+| 26 | Stella Vance             | `Zephyr`         | rock, pop, indie                         |
+| 27 | Tia "TJ" Jackson         | `Kore`           | hiphop, rnb                              |
+| 28 | Maya Goldberg            | `Umbriel`        | indie, pop                               |
+
+Run `npm run smoke -- --list-djs` to inspect the roster and check which avatars have been baked locally. `npm run smoke -- --check-avatars` gives a CI-friendly OK/MISSING summary.
+
+#### Baking DJ avatars
+
+Each persona is rendered as a 1024×1024 painterly PNG via Gemini's image model and served from `public/images/djs/<slug>.png`. The avatars ship empty (regenerating them is non-deterministic and costs Gemini image credits), so bake them locally once:
+
+```powershell
+# Bake every missing avatar (idempotent — existing PNGs are left alone)
+npm run seed:dj-avatars
+
+# Re-bake a single DJ
+npm run seed:dj-avatars -- --dj rusty --force
+
+# Preview the prompts that would be sent without spending credits
+npm run seed:dj-avatars -- --dry-run
+
+# Print the persona list and exit
+npm run seed:dj-avatars -- --list
+```
+
+The script reads `appearance:` + `scene:` from each persona's markdown file (see [personas/README.md](personas/README.md)) and uses them to build a consistent painterly portrait prompt.
 
 ---
 
@@ -73,9 +124,10 @@ server/
   services/
     llm/       Provider-pluggable chat (default: Gemini)
     tts/       Provider-pluggable speech synth (default: Gemini → WAV)
-    news/      RSS dispatchers: dk (DR), es (El País), iowa (IPR) + dedupe
-    transit/   Copenhagen — Rejseplanen primary, DSB RSS fallback, 5-min cache
-    rundown/   Show runner; weaves songs, weather, history, news, transit
+    news/        RSS dispatchers: dk (DR), es (El País), iowa (IPR) + dedupe
+    transit/     Copenhagen — Rejseplanen primary, DSB RSS fallback, 5-min cache
+    musicFacts/  Grounded song/artist facts — MusicBrainz + Wikipedia, in-mem LRU cache
+    rundown/     Show runner; weaves songs, weather, music facts, history, news, transit
   db/          Sequelize models (PostgreSQL)
 ```
 
@@ -116,10 +168,10 @@ Optional knobs:
 | Variable                  | Default                        | What it controls                                |
 | ------------------------- | ------------------------------ | ----------------------------------------------- |
 | `LLM_PROVIDER`            | `gemini`                       | Chat provider key                               |
-| `GEMINI_TEXT_MODEL`       | `gemini-2.5-flash`             | Gemini chat model                               |
+| `GEMINI_TEXT_MODEL`       | `gemini-3.1-flash-lite`        | Gemini chat model                               |
 | `GEMINI_TEXT_TEMPERATURE` | `1.0`                          | Chat temperature                                |
 | `TTS_PROVIDER`            | `gemini`                       | Speech provider key                             |
-| `GEMINI_TTS_MODEL`        | `gemini-2.5-flash-preview-tts` | Gemini TTS model                                |
+| `GEMINI_TTS_MODEL`        | `gemini-3.1-flash-tts-preview` | Gemini TTS model                                |
 | `TTS_OUTPUT`              | `wav`                          | Output format (mp3 needs ffmpeg — not bundled)  |
 | `NEWS_TOPIC_ROTATION`     | `dk,es,iowa`                   | Comma-separated locale rotation for news brief  |
 | `TRANSIT_ENABLED`         | `true`                         | Toggle the Copenhagen transit segment           |

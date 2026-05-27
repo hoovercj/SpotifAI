@@ -16,7 +16,7 @@ const TABS = [
 export default function BottomTabBar() {
   return (
     <nav
-      className="sticky bottom-0 z-30 border-t border-border/40 bg-background/95 backdrop-blur-md"
+      className="border-t border-border/40 bg-background/95 backdrop-blur-md"
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
     >
       <ul className="grid grid-cols-3">

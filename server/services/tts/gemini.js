@@ -5,8 +5,10 @@
  * little-endian PCM as base64. We wrap it in a 44-byte WAV header and
  * write to disk.
  *
- * Voice IDs are Gemini preset voice names (Fenrir, Aoede, Charon, Kore,
- * Puck, Zephyr, etc.) — NOT ElevenLabs voice hashes.
+ * Voice IDs are Gemini preset voice names (Algenib, Autonoe, Sadaltager,
+ * Sulafat, Puck, Zephyr, Kore, etc.) — NOT ElevenLabs voice hashes. The
+ * full 30-voice catalog is documented at:
+ *   https://ai.google.dev/gemini-api/docs/speech-generation#voices
  */
 const fs = require('fs');
 const path = require('path');
@@ -32,7 +34,13 @@ function sanitizeBaseName(name) {
   return String(name).replace(/[^a-zA-Z0-9 _-]/g, '').trim() || 'segment';
 }
 
-const PROJECT_ROOT = path.resolve(__dirname, '..', '..');
+// __dirname is <repo>/server/services/tts, so three "..".
+// We need <repo>/public/audio — the same folder Express and Vite serve as
+// /audio/*. Previously this only went up two levels, which silently wrote
+// the WAVs to <repo>/server/public/audio/ where nothing serves them, so
+// every intro 404'd in the browser and audio.play() rejected without a
+// visible error.
+const PROJECT_ROOT = path.resolve(__dirname, '..', '..', '..');
 const AUDIO_DIR = path.join(PROJECT_ROOT, 'public', 'audio');
 
 async function synthesize({ text, voiceId, fileBaseName }) {
@@ -45,7 +53,7 @@ async function synthesize({ text, voiceId, fileBaseName }) {
   }
 
   const ai = getClient();
-  const model = process.env.GEMINI_TTS_MODEL || 'gemini-2.5-flash-preview-tts';
+  const model = process.env.GEMINI_TTS_MODEL || 'gemini-3.1-flash-tts-preview';
 
   const response = await ai.models.generateContent({
     model,

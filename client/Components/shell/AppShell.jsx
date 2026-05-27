@@ -17,9 +17,9 @@ import NowPlayingBar from "../player/NowPlayingBar"
  */
 export default function AppShell() {
   return (
-    <div className="min-h-dvh w-full bg-background text-foreground">
-      <div className="mx-auto flex min-h-dvh max-w-[480px] flex-col border-x border-border/40">
-        <header className="sticky top-0 z-30 flex items-center justify-between gap-2 border-b border-border/40 bg-background/85 px-4 py-3 backdrop-blur-md">
+    <div className="h-dvh w-full bg-background text-foreground">
+      <div className="mx-auto flex h-dvh max-w-[480px] flex-col border-x border-border/40">
+        <header className="flex items-center justify-between gap-2 border-b border-border/40 bg-background/85 px-4 py-3 backdrop-blur-md">
           <div className="flex items-center gap-2">
             <span className="grid h-8 w-8 place-items-center rounded-md bg-gradient-to-br from-violet-500 to-fuchsia-500 text-foreground shadow-md shadow-fuchsia-900/40">
               <Sparkles className="h-4 w-4" />
@@ -31,14 +31,16 @@ export default function AppShell() {
           <AccountMenu />
         </header>
 
-        <main className="flex-1 overflow-y-auto pb-[calc(var(--player-offset,0px)+72px+env(safe-area-inset-bottom))]">
+        <main className="flex-1 overflow-y-auto">
           <Outlet />
         </main>
 
-        <div className="sticky bottom-[calc(56px+env(safe-area-inset-bottom))] z-20">
-          <NowPlayingBar />
-        </div>
-
+        {/* NowPlayingBar and BottomTabBar are flex siblings of <main> — they
+            take their own layout space below the scroll area, so <main> does
+            not need bottom padding and these elements do not need sticky
+            positioning. NowPlayingBar returns null when nothing is playing,
+            collapsing this slot to zero height. */}
+        <NowPlayingBar />
         <BottomTabBar />
       </div>
     </div>

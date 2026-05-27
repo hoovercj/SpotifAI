@@ -1,0 +1,123 @@
+# SpotifAI DJ intro evaluation — Promptfoo config.
+#
+# Default comparison axis: BASELINE (current production .md files) vs
+# EXPERIMENT (whatever's in the experiments/ overlay dirs). Iteration
+# is safe: production files are never edited mid-eval — you copy them
+# into prompts/experiments/ (and/or personas/experiments/), tweak the
+# copy, eval, and promote when happy.
+#
+# Prompt templates live in `<repo>/prompts/*.md` as Nunjucks templates.
+# Persona definitions live in `<repo>/personas/*.md` (same Nunjucks-friendly
+# format). Production code renders them via `loadPrompt` / `loadPersonas`;
+# the eval reuses those loaders. No wrapper duplication.
+#
+# Workflow:
+#   # 1. Copy a file from prompts/ or personas/ into the matching experiments/ dir.
+#   #    e.g. cp prompts/station-intro.md prompts/experiments/station-intro.md
+#   #    Edit the copy.
+#   npm run eval           # baseline cache-served, experiment regenerates
+#   npm run eval:view      # open the side-by-side matrix viewer
+#   # 2. If the experiment wins:
+#   npm run eval:promote   # cp experiments/*.md → top-level/, then delete experiments/*.md
+#   npm run eval           # re-cache the new baseline (now living at the top level)
+#
+# Or to nuke the cache entirely (rerun every cell):
+#   npm run eval:fresh
+#
+# Ad-hoc slicing without editing this file (pass through `--`):
+#   npm run eval -- --filter-providers "pro"            only the pro model
+#   npm run eval -- --filter-prompts experiment         only the experiment column
+#   npm run eval -- --filter-pattern "pop/.*cold"       only cold-pop tests
+#
+# Expand any axis by uncommenting one of the blocks below. Adding extra
+# providers or prompts multiplies the matrix size, so consider running
+# with --filter-tests while you're iterating, then full sweep at the end.
+#
+# Requires GOOGLE_API_KEY in env (promptfoo also reads .env).
+
+description: SpotifAI — AI Station DJ intro
+
+providers:
+  # Production-equivalent — keep this id + temperature aligned with
+  # GEMINI_TEXT_MODEL / GEMINI_TEXT_TEMPERATURE in
+  # server/services/llm/gemini.js so eval scores reflect what users hear.
+  - id: google:gemini-2.5-flash
+    label: flash (T=0.9)
+    config:
+      temperature: 0.9
+      generationConfig:
+        maxOutputTokens: 400
+
+  # ─── Uncomment to add a temperature comparison ───────────────────────────
+  # - id: google:gemini-2.5-flash
+  #   label: flash (T=0.4)
+  #   config:
+  #     temperature: 0.4
+  #     generationConfig:
+  #       maxOutputTokens: 400
+
+  # ─── Uncomment to add a model comparison ─────────────────────────────────
+  # - id: google:gemini-2.5-pro
+  #   label: pro (T=0.9)
+  #   config:
+  #     temperature: 0.9
+  #     generationConfig:
+  #       maxOutputTokens: 400
+
+# Two prompt loaders → matrix shows them as side-by-side columns.
+# `baseline` reads from prompts/ + personas/ (production source of truth).
+# `experiment` overlays anything in prompts/experiments/ + personas/experiments/
+# on top, falling back to baseline files when no override exists.
+prompts:
+  - id: file://prompts/intro.cjs
+    label: baseline
+  - id: file://prompts/intro-experiment.cjs
+    label: experiment
+
+# CJS module returning one test case per (genre × station × mode) tuple
+# in the production catalog.
+tests: file://datasets/intros.cjs
+
+defaultTest:
+  options:
+    # Judge model for the llm-rubric assertion. Slightly cooler than the
+    # generator so scores are more deterministic.
+    provider:
+      id: google:gemini-2.5-flash
+      config:
+        temperature: 0.2
+
+  assert:
+    # Cheap structural checks first — fail fast before paying for judge.
+    - type: javascript
+      value: file://assertions/intro.cjs:hasReasonableLength
+    - type: javascript
+      value: file://assertions/intro.cjs:hasFewSentences
+    - type: javascript
+      value: file://assertions/intro.cjs:noBrokenFourthWall
+    - type: javascript
+      value: file://assertions/intro.cjs:noMarkdownNoise
+    - type: javascript
+      value: file://assertions/intro.cjs:mentionsStation
+
+    # Soft quality check — LLM-as-judge with a per-test persona rubric.
+    - type: llm-rubric
+      value: |
+        Rate the on-air radio DJ intro below against the persona and brief.
+
+        Persona name: {{ djName }}
+        Persona style: {{ djStyle }}
+        Station: "{{ stationName }}" ({{ genreName }} genre)
+        Mode: {{ mode }} (cold = welcoming a brand-new listener,
+                         warm = quick "back on air" bumper)
+
+        Score 1–5 on EACH of:
+          - In character: feels like {{ djName }} would actually say this
+          - On theme: clearly relates to the {{ stationName }} angle
+          - Energy: confident and engaging, not flat / generic
+          - Brevity: cold = 2–4 sentences; warm = 1–2 sentences
+
+        Pass if average ≥ 3.5 AND no individual score < 3.
+        Reply "PASS" or "FAIL" on line 1, then one sentence of justification.
+
+outputPath: file://output/intro-eval.json

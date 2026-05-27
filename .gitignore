@@ -15,3 +15,6 @@ public/audio/*.mp3
 
 # Debug runtime state (rewritten by server/services/utl/debugTracker.js)
 debug/debugTracker.json
+
+# AI smoke test artifacts (transcripts + WAVs from scripts/smoke.js)
+smoke-output/

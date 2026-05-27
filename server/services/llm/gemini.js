@@ -23,7 +23,7 @@ function getClient() {
 
 async function createChatSession({ systemInstruction, sessionId }) {
   const ai = getClient();
-  const model = process.env.GEMINI_TEXT_MODEL || 'gemini-2.5-flash';
+  const model = process.env.GEMINI_TEXT_MODEL || 'gemini-3.1-flash-lite';
   const temperature = Number(process.env.GEMINI_TEXT_TEMPERATURE ?? 1.0);
 
   const chat = ai.chats.create({

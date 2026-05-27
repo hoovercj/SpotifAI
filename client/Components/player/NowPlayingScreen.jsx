@@ -1,4 +1,4 @@
-import React, { useState } from "react"
+import React, { useEffect, useMemo, useState } from "react"
 import { useDispatch, useSelector } from "react-redux"
 import {
   ChevronDown,
@@ -9,6 +9,8 @@ import {
   Volume2,
   VolumeX,
   Mic2,
+  Shuffle,
+  X,
 } from "lucide-react"
 import {
   Drawer,
@@ -25,8 +27,17 @@ import {
   setVolume,
   toggleMuted,
 } from "../../store/playerSlice"
+import {
+  fetchExclusiveDj,
+  fetchPreferenceForSeed,
+  setPreferenceForSeed,
+  deletePreferenceForSeed,
+  updateExclusiveDj,
+  clearExclusiveDj,
+} from "../../store/djPreferencesSlice"
 import { useSpotifyPlayer } from "./useSpotifyPlayer"
 import DjOnAirIndicator from "./DjOnAirIndicator"
+import DjAvatarTile from "./DjAvatarTile"
 
 function formatTime(ms) {
   if (!ms || ms < 0) return "0:00"
@@ -54,9 +65,106 @@ export default function NowPlayingScreen() {
   const context = useSelector((s) => s.player?.currentContext)
   const dj = useSelector((s) => s.djs?.currentDj)
   const allDjs = useSelector((s) => s.djs?.allDjs)
+  // Used to decide whether to render the shuffle button. Only playlist
+  // seeds get shuffle — for stations/moods/track/artist sessions the
+  // server has already curated a meaningful order (or refill keeps the
+  // stream fresh) and shuffling would just be noise.
+  const currentSession = useSelector((s) => s.player?.currentSession)
+  const canShuffle = currentSession?.seed?.type === "playlist"
 
-  const { togglePlay, next, previous, seek, selectDj } = useSpotifyPlayer()
+  const { togglePlay, next, previous, seek, selectDj, shuffleCurrentSession } =
+    useSpotifyPlayer()
   const [showDjPicker, setShowDjPicker] = useState(false)
+  const [pendingDj, setPendingDj] = useState(null)
+
+  // Prefs (Phase 7) — exclusiveDjId is the global override; preference
+  // for this session's seed lives in preferencesBySeedKey[seedKey].
+  const exclusiveDjId = useSelector(
+    (s) => s.djPreferences?.exclusiveDjId ?? null
+  )
+  const preferencesBySeedKey = useSelector(
+    (s) => s.djPreferences?.preferencesBySeedKey || {}
+  )
+  const seedKey = currentSession?.id || null
+  const preferredDjId = seedKey ? preferencesBySeedKey[seedKey] || null : null
+
+  // Lazily hydrate prefs the first time the picker is opened. Avoid
+  // firing on initial mount so we don't bother anonymous users.
+  useEffect(() => {
+    if (!showDjPicker) return
+    dispatch(fetchExclusiveDj())
+    if (seedKey) dispatch(fetchPreferenceForSeed(seedKey))
+  }, [showDjPicker, seedKey, dispatch])
+
+  // Genre-aware candidate filter. If we can guess a genre tag from the
+  // session seed (station / mood / explicit `genres` field), narrow
+  // the avatar grid to DJs whose `details.genres` overlap. Otherwise
+  // show the full roster — better to over-show than to hide a fit.
+  const seedGenreTags = useMemo(() => {
+    const seed = currentSession?.seed || {}
+    const tags = new Set()
+    if (typeof seed.genreId === "string") tags.add(seed.genreId)
+    if (Array.isArray(seed.genres)) seed.genres.forEach((g) => tags.add(g))
+    return tags
+  }, [currentSession])
+
+  const orderedDjs = useMemo(() => {
+    const list = Array.isArray(allDjs) ? [...allDjs] : []
+    list.sort((a, b) => (a.id || 0) - (b.id || 0))
+    if (seedGenreTags.size === 0) return list
+    // Genre-matching first, then the rest, so the player sees plausible
+    // hosts up top but still has access to everyone for an off-piste swap.
+    const matches = []
+    const rest = []
+    for (const d of list) {
+      const djGenres = d?.details?.genres || []
+      const hit = djGenres.some((g) => seedGenreTags.has(g))
+      if (hit) matches.push(d)
+      else rest.push(d)
+    }
+    return [...matches, ...rest]
+  }, [allDjs, seedGenreTags])
+
+  const closePicker = () => {
+    setShowDjPicker(false)
+    setPendingDj(null)
+  }
+
+  const handlePickSwap = () => {
+    if (!pendingDj) return
+    selectDj(pendingDj)
+    if (seedKey) {
+      // Clear any stale per-seed preference — the user wants this swap
+      // to be ephemeral. (Exclusive override is untouched.)
+      dispatch(deletePreferenceForSeed(seedKey))
+    }
+    closePicker()
+  }
+
+  const handlePickPreferred = () => {
+    if (!pendingDj || !seedKey) return
+    selectDj(pendingDj)
+    dispatch(
+      setPreferenceForSeed({ seedKey, djId: pendingDj.id })
+    )
+    closePicker()
+  }
+
+  const handlePickExclusive = () => {
+    if (!pendingDj) return
+    selectDj(pendingDj)
+    dispatch(updateExclusiveDj(pendingDj.id))
+    closePicker()
+  }
+
+  const handleClearExclusive = () => {
+    dispatch(clearExclusiveDj())
+  }
+
+  const handleClearPreferred = () => {
+    if (!seedKey) return
+    dispatch(deletePreferenceForSeed(seedKey))
+  }
 
   return (
     <Drawer
@@ -92,6 +200,22 @@ export default function NowPlayingScreen() {
         </DrawerHeader>
 
         <div className="flex flex-1 flex-col gap-6 overflow-y-auto px-6 pb-10">
+          {/* DJ avatar — tappable shortcut to the picker. Sits above the
+              album art so the listener always sees who's hosting. */}
+          {dj ? (
+            <div className="mx-auto -mb-2 flex flex-col items-center gap-1">
+              <DjAvatarTile
+                dj={dj}
+                size="lg"
+                onClick={() => setShowDjPicker(true)}
+                ariaLabel={`Hosted by ${dj.djName}. Tap to change.`}
+              />
+              <span className="text-[11px] uppercase tracking-wider text-muted-foreground">
+                Hosted by {dj.djName}
+              </span>
+            </div>
+          ) : null}
+
           {/* Album art */}
           <div className="mx-auto mt-2 aspect-square w-full max-w-sm overflow-hidden rounded-2xl bg-muted shadow-2xl shadow-black/60">
             {track?.image ? (
@@ -136,6 +260,17 @@ export default function NowPlayingScreen() {
 
           {/* Transport */}
           <div className="flex items-center justify-center gap-6">
+            {canShuffle && (
+              <button
+                type="button"
+                aria-label="Shuffle playlist"
+                onClick={() => shuffleCurrentSession()}
+                className="grid h-10 w-10 place-items-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
+                title="Re-shuffle this playlist"
+              >
+                <Shuffle className="h-5 w-5" />
+              </button>
+            )}
             <button
               type="button"
               aria-label="Previous track"
@@ -190,33 +325,124 @@ export default function NowPlayingScreen() {
             />
           </div>
 
-          {/* DJ picker (collapsible) */}
+          {/* DJ picker (collapsible) — avatar grid with optional
+              "set as exclusive" / "lock to this session" upgrades. */}
           {showDjPicker && (
             <div className="rounded-xl border border-border/60 bg-card/60 p-4">
-              <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Choose your DJ
-              </p>
-              <div className="grid grid-cols-2 gap-2">
-                {(allDjs || []).map((d) => (
-                  <Button
-                    key={d.id}
-                    variant={dj?.id === d.id ? "default" : "ghost"}
-                    size="sm"
-                    className="justify-start"
-                    onClick={() => {
-                      selectDj(d)
-                      setShowDjPicker(false)
-                    }}
-                  >
-                    {d.djName}
-                  </Button>
-                ))}
-                {(!allDjs || allDjs.length === 0) && (
-                  <p className="col-span-2 text-xs text-muted-foreground">
+              <div className="mb-3 flex items-center justify-between">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Choose your DJ
+                </p>
+                <button
+                  type="button"
+                  onClick={closePicker}
+                  aria-label="Close DJ picker"
+                  className="grid h-7 w-7 place-items-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              {(exclusiveDjId || preferredDjId) && (
+                <div className="mb-3 flex flex-col gap-1 rounded-md bg-muted/40 p-2 text-[11px] text-muted-foreground">
+                  {exclusiveDjId ? (
+                    <div className="flex items-center justify-between gap-2">
+                      <span>
+                        Exclusive DJ active —{" "}
+                        {allDjs?.find?.((d) => d.id === exclusiveDjId)
+                          ?.djName || `#${exclusiveDjId}`}{" "}
+                        hosts every session.
+                      </span>
+                      <button
+                        type="button"
+                        onClick={handleClearExclusive}
+                        className="text-fuchsia-400 hover:underline"
+                      >
+                        Clear
+                      </button>
+                    </div>
+                  ) : null}
+                  {preferredDjId ? (
+                    <div className="flex items-center justify-between gap-2">
+                      <span>
+                        This seed is locked to{" "}
+                        {allDjs?.find?.((d) => d.id === preferredDjId)
+                          ?.djName || `#${preferredDjId}`}
+                        .
+                      </span>
+                      <button
+                        type="button"
+                        onClick={handleClearPreferred}
+                        className="text-fuchsia-400 hover:underline"
+                      >
+                        Clear
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
+              )}
+
+              <div className="grid max-h-72 grid-cols-4 gap-3 overflow-y-auto sm:grid-cols-5">
+                {orderedDjs.length === 0 && (
+                  <p className="col-span-full text-xs text-muted-foreground">
                     Loading DJs…
                   </p>
                 )}
+                {orderedDjs.map((d) => (
+                  <DjAvatarTile
+                    key={d.id}
+                    dj={d}
+                    size="md"
+                    showName
+                    selected={dj?.id === d.id}
+                    onClick={() => setPendingDj(d)}
+                  />
+                ))}
               </div>
+
+              {pendingDj && (
+                <div className="mt-4 flex flex-col gap-3 rounded-md border border-border/60 bg-background/80 p-3">
+                  <div className="flex items-center gap-3">
+                    <DjAvatarTile dj={pendingDj} size="sm" />
+                    <div className="flex flex-col">
+                      <p className="text-sm font-medium text-foreground">
+                        Switch to {pendingDj.djName}?
+                      </p>
+                      <p className="text-[11px] text-muted-foreground">
+                        Pick how long this stays in effect.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button size="sm" onClick={handlePickSwap}>
+                      Just this session
+                    </Button>
+                    {seedKey && (
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={handlePickPreferred}
+                      >
+                        Always for this seed
+                      </Button>
+                    )}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={handlePickExclusive}
+                    >
+                      Make exclusive
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setPendingDj(null)}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>

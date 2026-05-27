@@ -2,6 +2,7 @@ const { synthesize } = require('./tts');
 
 const { saveDebugTrackerToFile } = require('./utl/debugTracker');
 const { songPrompts } = require('./utl/promptConstructor');
+const { buildTtsPrompt } = require('./utl/buildTtsPrompt');
 const { djCharacters } = require('./djCharacters');
 
 /**
@@ -25,8 +26,9 @@ async function createContent(
   customPrompt
 ) {
   try {
-    const { details } = await djCharacters(djId);
-    const { voiceID } = details;
+    const persona = await djCharacters(djId);
+    const { djName, details } = persona;
+    const { voiceID, ttsDirection } = details;
 
     const debugTracker = [];
 
@@ -45,12 +47,17 @@ async function createContent(
       ));
 
     const spokenText = await chat.sendMessage(input);
+    const ttsInput = buildTtsPrompt({
+      djName,
+      ttsDirection,
+      transcript: spokenText,
+    });
 
     saveDebugTrackerToFile(debugTracker);
     const timestamp = Date.now();
     const baseName = `${songName || 'segment'}_${bandName || 'dj'}_${timestamp}`;
     return await synthesize({
-      text: spokenText,
+      text: ttsInput,
       voiceId: voiceID,
       fileBaseName: baseName,
     });

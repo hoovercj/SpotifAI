@@ -10,7 +10,7 @@ import LibraryTab from "./tabs/LibraryTab"
 import { PlayerProvider } from "./player/PlayerProvider"
 import NowPlayingScreen from "./player/NowPlayingScreen"
 import { fetchDjs } from "../store/djsSlice"
-import { fetchUserStations } from "../store/stationsSlice"
+import { fetchUserPlaylists } from "../store/spotifyPlaylistsSlice"
 
 /**
  * Mounted once the user is authenticated (or has a fresh OAuth `code`).
@@ -33,7 +33,7 @@ export default function AppAuthWrapper({ code }) {
       // Spotify deprecated Dev-Mode access to editorial/algorithmic
       // playlists in Nov 2024. We only show playlists owned by the
       // signed-in user.
-      dispatch(fetchUserStations())
+      dispatch(fetchUserPlaylists())
     }
   }, [accessToken, dispatch])
 

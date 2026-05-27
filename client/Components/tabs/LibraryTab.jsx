@@ -61,8 +61,8 @@ export default function LibraryTab() {
   const [filter, setFilter] = useState("all")
   const [view, setView] = useState("list")
 
-  const playlists = useSelector((s) => s.stations?.allStations || [])
-  const playlistsLoading = useSelector((s) => Boolean(s.stations?.loading))
+  const playlists = useSelector((s) => s.spotifyPlaylists?.allPlaylists || [])
+  const playlistsLoading = useSelector((s) => Boolean(s.spotifyPlaylists?.loading))
 
   const savedAlbums = useSelector((s) => s.library.savedAlbums)
   const savedTracks = useSelector((s) => s.library.savedTracks)

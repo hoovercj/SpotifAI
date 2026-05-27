@@ -1,0 +1,3 @@
+# Promptfoo writes per-run output + a SQLite cache locally.
+output/
+.promptfoo/
