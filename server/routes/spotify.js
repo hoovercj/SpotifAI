@@ -2,10 +2,7 @@ const router = require('express').Router()
 const SpotifyWebApi = require('spotify-web-api-node')
 const { User, Profile } = require('../db')
 
-const spotifyRedirect =
-  process.env.NODE_ENV === 'production'
-    ? process.env.SPOTIFY_REDIRECT_URI_PROD
-    : process.env.SPOTIFY_REDIRECT_URI_DEV
+const spotifyRedirect = process.env.SPOTIFY_REDIRECT_URI
 
 // Refresh ~60s before the token actually expires so we don't hand the client a
 // nearly-expired token.

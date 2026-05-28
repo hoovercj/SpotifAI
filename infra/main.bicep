@@ -28,6 +28,9 @@ param spotifyClientId string
 @secure()
 param spotifyClientSecret string
 
+@description('Spotify OAuth redirect URI. Must exactly match an entry registered in the Spotify Developer dashboard.')
+param spotifyRedirectUri string
+
 @description('Long random string for Express session signing')
 @secure()
 param sessionSecret string
@@ -112,6 +115,7 @@ module web 'modules/containerApp.bicep' = {
     googleApiKey: googleApiKey
     spotifyClientId: spotifyClientId
     spotifyClientSecret: spotifyClientSecret
+    spotifyRedirectUri: spotifyRedirectUri
     sessionSecret: sessionSecret
     openWeatherApiKey: openWeatherApiKey
     locationIqApiKey: locationIqApiKey

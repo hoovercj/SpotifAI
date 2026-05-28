@@ -20,6 +20,9 @@
     "spotifyClientSecret": {
       "value": "${SPOTIFY_CLIENT_SECRET}"
     },
+    "spotifyRedirectUri": {
+      "value": "${SPOTIFY_REDIRECT_URI}"
+    },
     "sessionSecret": {
       "value": "$(secretOrRandomPassword)"
     },

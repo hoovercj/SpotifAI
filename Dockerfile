@@ -3,6 +3,13 @@
 FROM node:22-alpine AS build
 WORKDIR /app
 ENV NODE_ENV=production
+# Build-time args inlined into the client bundle by Vite's `define` block.
+# Must be supplied (e.g. via azure.yaml docker.buildArgs) for Spotify OAuth to
+# resolve in the deployed app — the browser has no process.env at runtime.
+ARG SPOTIFY_CLIENT_ID
+ARG SPOTIFY_REDIRECT_URI
+ENV SPOTIFY_CLIENT_ID=$SPOTIFY_CLIENT_ID
+ENV SPOTIFY_REDIRECT_URI=$SPOTIFY_REDIRECT_URI
 COPY package*.json ./
 # Install ALL deps (incl. dev) so Vite + Tailwind are available for the build
 RUN npm install --include=dev --no-audit --no-fund

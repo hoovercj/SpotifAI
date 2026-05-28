@@ -11,6 +11,12 @@ services:
     host: containerapp
     docker:
       path: Dockerfile
+      # Forward azd env values into the docker build as --build-arg so Vite can
+      # inline them into the client bundle. The server reads SPOTIFY_REDIRECT_URI
+      # from the Container App env at runtime (set via Bicep).
+      buildArgs:
+        - SPOTIFY_CLIENT_ID
+        - SPOTIFY_REDIRECT_URI
 
 hooks:
   postprovision:

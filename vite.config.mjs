@@ -12,8 +12,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // to preserve backwards compatibility with the existing .env file.
 const CLIENT_ENV_KEYS = [
   'SPOTIFY_CLIENT_ID',
-  'SPOTIFY_REDIRECT_URI_DEV',
-  'SPOTIFY_REDIRECT_URI_PROD',
+  'SPOTIFY_REDIRECT_URI',
 ];
 
 // In dev: Vite serves the client on :3000 (matches Spotify OAuth redirect URI),

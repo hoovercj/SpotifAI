@@ -5,10 +5,7 @@ import { Button } from "@/Components/ui/button"
 // Preserved from the original webpack/DotenvWebpack-era config — these are
 // injected at build time by vite.config.mjs's `define` block.
 const CLIENT_ID = process.env.SPOTIFY_CLIENT_ID
-const REDIRECT_URI =
-  process.env.NODE_ENV === "production"
-    ? process.env.SPOTIFY_REDIRECT_URI_PROD
-    : process.env.SPOTIFY_REDIRECT_URI_DEV
+const REDIRECT_URI = process.env.SPOTIFY_REDIRECT_URI
 
 const SCOPES = [
   "streaming",

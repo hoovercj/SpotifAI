@@ -95,7 +95,7 @@ npm install
 
 # 2. Copy .envSample → .env and fill in at minimum:
 #    GOOGLE_API_KEY, SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET,
-#    SPOTIFY_REDIRECT_URI_DEV, DATABASE_URL, SESSION_SECRET
+#    SPOTIFY_REDIRECT_URI, DATABASE_URL, SESSION_SECRET
 Copy-Item .envSample .env
 
 # 3. Make sure PostgreSQL is running and the database in DATABASE_URL exists.
@@ -159,7 +159,7 @@ See [.envSample](.envSample) for the full list. The required variables are:
 | -------------------------- | --------------------------------------------- |
 | `GOOGLE_API_KEY`           | Gemini text + TTS                             |
 | `SPOTIFY_CLIENT_ID/SECRET` | Spotify OAuth                                 |
-| `SPOTIFY_REDIRECT_URI_DEV` | OAuth redirect (must match Spotify dashboard) |
+| `SPOTIFY_REDIRECT_URI`     | OAuth redirect (must match Spotify dashboard) |
 | `DATABASE_URL`             | PostgreSQL connection string                  |
 | `SESSION_SECRET`           | Express session signing                       |
 

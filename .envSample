@@ -9,8 +9,10 @@ QUIET=TRUE
 # --- Spotify (Premium account required for Web Playback SDK) ---
 SPOTIFY_CLIENT_ID=
 SPOTIFY_CLIENT_SECRET=
-SPOTIFY_REDIRECT_URI_DEV=http://127.0.0.1:3000
-SPOTIFY_REDIRECT_URI_PROD=https://your-app.azurecontainerapps.io
+# Must exactly match a redirect URI registered in your Spotify Developer dashboard.
+# Local dev: http://127.0.0.1:3000
+# Production: https://your-custom-domain.example.com (or the Container App FQDN)
+SPOTIFY_REDIRECT_URI=http://127.0.0.1:3000
 
 # --- Google Gemini (LLM + TTS) ---
 # Get a key from https://aistudio.google.com/apikey

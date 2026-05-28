@@ -14,6 +14,7 @@ param googleApiKey string
 param spotifyClientId string
 @secure()
 param spotifyClientSecret string
+param spotifyRedirectUri string
 @secure()
 param sessionSecret string
 @secure()
@@ -52,6 +53,7 @@ var baseEnv = [
   { name: 'NODE_ENV', value: 'production' }
   { name: 'PORT', value: string(targetPort) }
   { name: 'QUIET', value: 'TRUE' }
+  { name: 'SPOTIFY_REDIRECT_URI', value: spotifyRedirectUri }
   { name: 'DATABASE_URL',          secretRef: 'database-url' }
   { name: 'GOOGLE_API_KEY',        secretRef: 'google-api-key' }
   { name: 'SPOTIFY_CLIENT_ID',     secretRef: 'spotify-client-id' }
