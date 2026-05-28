@@ -21,6 +21,9 @@ param locationIqApiKey string
 @secure()
 param rejseplanenAccessId string
 
+@description('Comma-separated list of admin email addresses (seeded on every boot).')
+param adminEmails string
+
 @description('App Service Plan SKU. B1 is the cheapest always-on Linux tier.')
 param skuName string = 'B1'
 
@@ -49,6 +52,7 @@ var optionalSettings = filter([
   { name: 'OPEN_WEATHER_API_KEY', value: openWeatherApiKey }
   { name: 'LOCATION_IQ_API_KEY', value: locationIqApiKey }
   { name: 'REJSEPLANEN_ACCESS_ID', value: rejseplanenAccessId }
+  { name: 'ADMIN_EMAILS', value: adminEmails }
 ], s => !empty(s.value))
 
 var baseSettings = [

@@ -43,9 +43,4 @@ TRANSIT_ENABLED=true
 # Register for a free Rejseplanen access ID at https://www.rejseplanen.dk/labs/
 REJSEPLANEN_ACCESS_ID=
 
-
-
-
-
-
-
+ADMIN_EMAILS=

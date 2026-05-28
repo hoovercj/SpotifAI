@@ -19,9 +19,17 @@ async function setAdmin(email, isAdmin) {
 const syncAndSeed = async () => {
   await conn.sync({ force: false, alter: true })
   try {
-    // put seed operations here
-    await setAdmin('chris@armbrustermail.com', true)
-    await setAdmin('jejanov@gmail.com', true)
+    // Admins are configured via the ADMIN_EMAILS env var (comma-separated).
+    // Was previously hardcoded to two emails from the original fork — env
+    // is friendlier for rotating admins without a code change, and lets
+    // local dev keep its own list separate from prod.
+    const adminEmails = (process.env.ADMIN_EMAILS || '')
+      .split(',')
+      .map((e) => e.trim().toLowerCase())
+      .filter(Boolean)
+    for (const email of adminEmails) {
+      await setAdmin(email, true)
+    }
   } catch (err) {
     console.log('error seeding db')
   }

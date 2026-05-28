@@ -47,6 +47,9 @@ param locationIqApiKey string = ''
 @secure()
 param rejseplanenAccessId string = ''
 
+@description('Comma-separated list of admin email addresses (optional — pass empty string for no auto-admins)')
+param adminEmails string = ''
+
 var resourceToken = uniqueString(subscription().id, environmentName, location)
 var tags = {
   'azd-env-name': environmentName
@@ -97,6 +100,7 @@ module web 'modules/appService.bicep' = {
     openWeatherApiKey: openWeatherApiKey
     locationIqApiKey: locationIqApiKey
     rejseplanenAccessId: rejseplanenAccessId
+    adminEmails: adminEmails
   }
 }
 
