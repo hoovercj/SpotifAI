@@ -52,13 +52,11 @@ var optionalSettings = filter([
 ], s => !empty(s.value))
 
 var baseSettings = [
-  // Oryx-side build of the Node app (runs `npm install` + `npm run build`
-  // when the zip is uploaded, so Vite can produce dist/ on the server).
-  { name: 'SCM_DO_BUILD_DURING_DEPLOYMENT', value: 'true' }
-  { name: 'ENABLE_ORYX_BUILD', value: 'true' }
-  // Keep devDeps installed during build (Vite + Tailwind live there) even
-  // though NODE_ENV ends up `production` at runtime via `npm start`.
-  { name: 'NPM_CONFIG_PRODUCTION', value: 'false' }
+  // The deploy zip is a pre-built artifact (built on the GitHub runner).
+  // Skip Oryx entirely so App Service just extracts and runs `npm start`.
+  { name: 'SCM_DO_BUILD_DURING_DEPLOYMENT', value: 'false' }
+  { name: 'ENABLE_ORYX_BUILD', value: 'false' }
+  { name: 'WEBSITE_NODE_DEFAULT_VERSION', value: '~22' }
   { name: 'DATABASE_URL', value: databaseUrl }
   { name: 'GOOGLE_API_KEY', value: googleApiKey }
   { name: 'SPOTIFY_CLIENT_ID', value: spotifyClientId }

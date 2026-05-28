@@ -14,10 +14,12 @@
  *   - "warm": there's already a playlist. The intro is a quick "welcome
  *     back" line that flows into the first track. Should be short.
  *
- * The synthesized WAV lands in <repo>/public/audio/ and is served at the
- * same path by both Express (prod) and Vite (dev), so we hand the client
- * a relative URL it can drop straight into an <audio> element.
+ * The synthesized WAV lands in <repo>/runtime/audio/ (gitignored runtime
+ * output) and is served at /audio/<basename> by both Express (prod) and
+ * Vite (dev), so we hand the client a relative URL it can drop straight
+ * into an <audio> element.
  */
+const path = require("node:path")
 const { djCharacters } = require("../djCharacters")
 const { createChatSession } = require("../llm")
 const { buildDJSystemPrompt } = require("../llm/buildDJSystemPrompt")
@@ -64,8 +66,10 @@ async function createStationIntro({ djId, genre, station, mode = "warm" }) {
 
   // 3. Synthesize. Wrap the LLM output with a Director's-Notes preamble
   // per the Gemini speech-generation prompting guide; the TTS provider
-  // writes a WAV to <repo>/public/audio/... and returns the absolute file
-  // path. We translate that to the URL the client will fetch.
+  // writes a WAV to <repo>/runtime/audio/ and returns the absolute file
+  // path. We translate that to the URL the client will fetch. Both
+  // public/audio/ (seeded) and runtime/audio/ (generated) are mounted at
+  // the URL root, so /audio/<basename> resolves to either transparently.
   const ttsInput = buildTtsPrompt({
     djName: persona.djName,
     ttsDirection,
@@ -78,13 +82,7 @@ async function createStationIntro({ djId, genre, station, mode = "warm" }) {
     fileBaseName: baseName,
   })
 
-  const idx = filePath.lastIndexOf("public")
-  // After "public" the relative path uses OS separators on Windows; normalize
-  // to forward slashes so the browser can request it.
-  const audioUrl =
-    idx >= 0
-      ? filePath.slice(idx + "public".length).replace(/\\/g, "/")
-      : null
+  const audioUrl = `/audio/${path.basename(filePath)}`
 
   return {
     audioUrl,

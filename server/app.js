@@ -31,12 +31,20 @@ sessionFlag.set(true);
 // - In production, Vite builds the client to dist/ and Express serves it directly.
 // - In development, Vite runs its own dev server on :3000 and proxies /api to
 //   this Express instance on :3001, so the static middleware below is unused.
-// We still mount public/ so runtime assets (favicon, generated audio, etc.)
-// remain reachable in both environments.
+//
+// Two asset sources, both mounted at the URL root so /audio/<file> and
+// /images/<file> resolve transparently from either:
+//   - public/   committed seed assets (DJ avatars, station covers,
+//               pre-baked dj-intro WAVs, generic_segue.mp3, favicon).
+//   - runtime/  gitignored runtime output (per-session/per-track TTS WAVs
+//               written by server/services/tts). Created lazily by the
+//               TTS pipeline; express.static is tolerant of it missing.
 const distDir = path.join(__dirname, "..", "dist");
 const publicDir = path.join(__dirname, "..", "public");
+const runtimeDir = path.join(__dirname, "..", "runtime");
 app.use(express.static(distDir));
 app.use(express.static(publicDir));
+app.use(express.static(runtimeDir));
 
 app.use(
   session({

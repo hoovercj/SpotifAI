@@ -26,6 +26,22 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build client bundle
+        run: npm run build
+
+      - name: Stage deploy artifact
+        run: npm run package
+
       - name: Install azd
         uses: Azure/setup-azd@v2
       - name: Log in with Azure (Federated Credentials)
@@ -51,6 +67,7 @@ jobs:
       - name: Deploy Application
         run: azd deploy --no-prompt
         env:
+          AZD_DEPLOY_TIMEOUT: '2400'
           GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
           SPOTIFY_CLIENT_ID: ${{ secrets.SPOTIFY_CLIENT_ID }}
           SPOTIFY_CLIENT_SECRET: ${{ secrets.SPOTIFY_CLIENT_SECRET }}

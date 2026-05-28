@@ -35,13 +35,14 @@ function sanitizeBaseName(name) {
 }
 
 // __dirname is <repo>/server/services/tts, so three "..".
-// We need <repo>/public/audio — the same folder Express and Vite serve as
-// /audio/*. Previously this only went up two levels, which silently wrote
-// the WAVs to <repo>/server/public/audio/ where nothing serves them, so
-// every intro 404'd in the browser and audio.play() rejected without a
-// visible error.
+// We need <repo>/runtime/audio — the gitignored sibling of public/ that
+// holds files generated at runtime (per-session/per-track TTS output).
+// Seeded assets (DJ voice-intros, generic_segue.mp3) live in public/audio/
+// and are committed to the repo. Both directories are static-mounted at
+// the URL root by Express (and by Vite in dev via a configureServer
+// middleware), so /audio/<file> resolves transparently from either.
 const PROJECT_ROOT = path.resolve(__dirname, '..', '..', '..');
-const AUDIO_DIR = path.join(PROJECT_ROOT, 'public', 'audio');
+const AUDIO_DIR = path.join(PROJECT_ROOT, 'runtime', 'audio');
 
 async function synthesize({ text, voiceId, fileBaseName }) {
   const requestedFormat = (process.env.TTS_OUTPUT || 'wav').toLowerCase();

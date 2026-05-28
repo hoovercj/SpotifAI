@@ -1,10 +1,25 @@
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
+import express from 'express';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// Vite's built-in `publicDir` only supports a single directory. We have two
+// sources of static assets — `public/` (committed seed assets) and `runtime/`
+// (gitignored TTS output) — and need both served at the URL root in dev so
+// `/audio/<file>` resolves regardless of which dir actually holds it. In
+// prod, Express handles this directly. In dev, we splice an extra
+// express.static middleware into Vite's request pipeline via this plugin.
+const serveRuntimePlugin = {
+  name: 'spotifai:serve-runtime-assets',
+  configureServer(server) {
+    const runtimeDir = path.resolve(__dirname, 'runtime');
+    server.middlewares.use(express.static(runtimeDir));
+  },
+};
 
 // Client-side env vars that the old webpack/DotenvWebpack build exposed via
 // `process.env.*`. Vite normally only exposes vars prefixed with VITE_, so we
@@ -30,7 +45,7 @@ export default defineConfig(({ mode }) => {
   processEnvDefines['process.env.NODE_ENV'] = JSON.stringify(mode);
 
   return {
-    plugins: [react(), tailwindcss()],
+    plugins: [react(), tailwindcss(), serveRuntimePlugin],
     define: processEnvDefines,
     resolve: {
       alias: {
@@ -57,6 +72,9 @@ export default defineConfig(({ mode }) => {
       outDir: 'dist',
       emptyOutDir: true,
       sourcemap: true,
+      // Don't duplicate public/ (audio/avatars/station covers, ~190 MB) into dist/.
+      // The Express server mounts both dist/ and public/ separately at runtime.
+      copyPublicDir: false,
     },
     publicDir: 'public',
     // The react-spotify-web-playback CJS wrapper needs to be pre-bundled

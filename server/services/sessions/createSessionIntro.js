@@ -16,8 +16,10 @@
  *   })
  *
  * Mirrors `createStationIntro` in shape — emits a WAV in
- * <repo>/public/audio/, returns the URL the client can drop into <audio>.
+ * <repo>/runtime/audio/ (gitignored runtime output), returns the
+ * /audio/<basename> URL the client can drop into <audio>.
  */
+const path = require("node:path")
 const { djCharacters } = require("../djCharacters")
 const { createChatSession } = require("../llm")
 const { buildDJSystemPrompt } = require("../llm/buildDJSystemPrompt")
@@ -90,11 +92,10 @@ async function createSessionIntro({
     fileBaseName: baseName,
   })
 
-  const idx = filePath.lastIndexOf("public")
-  const audioUrl =
-    idx >= 0
-      ? filePath.slice(idx + "public".length).replace(/\\/g, "/")
-      : null
+  // filePath lives under runtime/audio/ (gitignored). Express + Vite both
+  // serve runtime/ and public/ at the URL root, so /audio/<basename>
+  // resolves regardless of which dir the file actually sits in.
+  const audioUrl = `/audio/${path.basename(filePath)}`
 
   return {
     audioUrl,

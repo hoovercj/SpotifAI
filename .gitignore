@@ -5,19 +5,21 @@ docker-compose.yml
 package-lock.json
 .DS_Store
 
-# Generated TTS audio (runtime output from server/services/tts)
-server/public/audio/*.wav
-server/public/audio/*.mp3
-public/audio/*.wav
-public/audio/*.mp3
-# Keep the upstream sample track that was committed before this rule
-!server/public/audio/Gimme Shelter*
+# Runtime-generated assets (per-session/per-track TTS WAVs written by
+# server/services/tts/gemini.js). Express + Vite serve this dir at the
+# URL root alongside public/, so /audio/<file> resolves to either. Keep
+# this dir out of git entirely — anything that belongs in the repo lives
+# in public/ instead.
+runtime/
 
 # Debug runtime state (rewritten by server/services/utl/debugTracker.js)
 debug/debugTracker.json
 
 # AI smoke test artifacts (transcripts + WAVs from scripts/smoke.js)
 smoke-output/
+
+# Pre-built deploy artifact assembled by `npm run package` for App Service.
+.deploy/
 
 # Local design/research scratch space (e.g. station-cover-design pipeline).
 # Everything under .tmp/ is exploratory output meant for human review,
