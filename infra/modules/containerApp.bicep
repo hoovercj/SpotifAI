@@ -29,6 +29,38 @@ param imageName string = 'mcr.microsoft.com/k8se/quickstart:latest'
 @description('Port the container listens on inside the pod')
 param targetPort int = 3000
 
+// Container Apps rejects secrets with empty string values, so we filter the
+// optional ones (open weather, locationiq, rejseplanen) out of both the
+// secrets array and the container env array when they are unset.
+var optionalSecretDefs = [
+  { name: 'open-weather-api-key',  envName: 'OPEN_WEATHER_API_KEY',  value: openWeatherApiKey }
+  { name: 'location-iq-api-key',   envName: 'LOCATION_IQ_API_KEY',   value: locationIqApiKey }
+  { name: 'rejseplanen-access-id', envName: 'REJSEPLANEN_ACCESS_ID', value: rejseplanenAccessId }
+]
+var activeOptionalSecrets = filter(optionalSecretDefs, s => !empty(s.value))
+
+var requiredSecrets = [
+  { name: 'database-url',          value: databaseUrl }
+  { name: 'google-api-key',        value: googleApiKey }
+  { name: 'spotify-client-id',     value: spotifyClientId }
+  { name: 'spotify-client-secret', value: spotifyClientSecret }
+  { name: 'session-secret',        value: sessionSecret }
+]
+var allSecrets = concat(requiredSecrets, map(activeOptionalSecrets, s => { name: s.name, value: s.value }))
+
+var baseEnv = [
+  { name: 'NODE_ENV', value: 'production' }
+  { name: 'PORT', value: string(targetPort) }
+  { name: 'QUIET', value: 'TRUE' }
+  { name: 'DATABASE_URL',          secretRef: 'database-url' }
+  { name: 'GOOGLE_API_KEY',        secretRef: 'google-api-key' }
+  { name: 'SPOTIFY_CLIENT_ID',     secretRef: 'spotify-client-id' }
+  { name: 'SPOTIFY_CLIENT_SECRET', secretRef: 'spotify-client-secret' }
+  { name: 'SESSION_SECRET',        secretRef: 'session-secret' }
+]
+var optionalEnv = map(activeOptionalSecrets, s => { name: s.envName, secretRef: s.name })
+var allEnv = concat(baseEnv, optionalEnv)
+
 // Managed identity used by the Container App to pull from ACR.
 resource appIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
   name: 'id-app-${resourceToken}'
@@ -88,16 +120,7 @@ resource app 'Microsoft.App/containerApps@2024-03-01' = {
           identity: appIdentity.id
         }
       ]
-      secrets: [
-        { name: 'database-url', value: databaseUrl }
-        { name: 'google-api-key', value: googleApiKey }
-        { name: 'spotify-client-id', value: spotifyClientId }
-        { name: 'spotify-client-secret', value: spotifyClientSecret }
-        { name: 'session-secret', value: sessionSecret }
-        { name: 'open-weather-api-key', value: openWeatherApiKey }
-        { name: 'location-iq-api-key', value: locationIqApiKey }
-        { name: 'rejseplanen-access-id', value: rejseplanenAccessId }
-      ]
+      secrets: allSecrets
     }
     template: {
       containers: [
@@ -108,19 +131,7 @@ resource app 'Microsoft.App/containerApps@2024-03-01' = {
             cpu: json('0.5')
             memory: '1Gi'
           }
-          env: [
-            { name: 'NODE_ENV', value: 'production' }
-            { name: 'PORT', value: string(targetPort) }
-            { name: 'QUIET', value: 'TRUE' }
-            { name: 'DATABASE_URL', secretRef: 'database-url' }
-            { name: 'GOOGLE_API_KEY', secretRef: 'google-api-key' }
-            { name: 'SPOTIFY_CLIENT_ID', secretRef: 'spotify-client-id' }
-            { name: 'SPOTIFY_CLIENT_SECRET', secretRef: 'spotify-client-secret' }
-            { name: 'SESSION_SECRET', secretRef: 'session-secret' }
-            { name: 'OPEN_WEATHER_API_KEY', secretRef: 'open-weather-api-key' }
-            { name: 'LOCATION_IQ_API_KEY', secretRef: 'location-iq-api-key' }
-            { name: 'REJSEPLANEN_ACCESS_ID', secretRef: 'rejseplanen-access-id' }
-          ]
+          env: allEnv
         }
       ]
       scale: {
