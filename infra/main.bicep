@@ -107,4 +107,5 @@ module web 'modules/appService.bicep' = {
 output AZURE_LOCATION string = location
 output AZURE_RESOURCE_GROUP string = rg.name
 output WEB_URI string = web.outputs.uri
+output WEB_NAME string = web.outputs.name
 output WEB_DEFAULT_HOSTNAME string = web.outputs.defaultHostName

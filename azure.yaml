@@ -9,10 +9,13 @@ services:
     project: .
     language: js
     host: appservice
-    # CI ('Build artifact' step in .github/workflows/azure-dev.yml) populates
-    # `release/` with the exact tree to deploy: server/, public/, dist/,
-    # package.json, package-lock.json, and a production-only node_modules.
-    # azd zips this folder and ships it directly to /home/site/wwwroot.
+    # `dist: release` is retained for `azd` metadata only — the CI workflow
+    # does NOT use `azd deploy` because azd's js packager strips
+    # `node_modules/` from the zip, leaving the container with no deps. The
+    # workflow (`.github/workflows/azure-dev.yml`) builds `release/`, zips
+    # it locally, and ships it with `az webapp deploy --type zip` so the
+    # tree lands in /home/site/wwwroot verbatim. Don't run `azd deploy`
+    # against this repo; it will produce a broken container.
     dist: release
 
 hooks:

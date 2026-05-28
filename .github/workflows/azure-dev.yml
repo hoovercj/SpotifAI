@@ -50,9 +50,13 @@ jobs:
           REJSEPLANEN_ACCESS_ID: ${{ secrets.REJSEPLANEN_ACCESS_ID }}
           ADMIN_EMAILS: ${{ vars.ADMIN_EMAILS }}
 
-      # Build a slim, self-contained artifact in ./release. azd's `dist:
-      # release` in azure.yaml makes it zip *only* this folder and ship it
-      # straight to /home/site/wwwroot (no Oryx, no server-side npm install).
+      # Build a slim, self-contained artifact in ./release, then zip it. We
+      # ship release.zip directly via `az webapp deploy` (below) instead of
+      # `azd deploy`, because azd's js packager strips `node_modules/` even
+      # when `dist:` points at a pre-built tree — so the container starts
+      # with no dependencies and crashes with "Cannot find module 'dotenv'".
+      # Going through az CLI side-steps that entirely: the zip is shipped to
+      # /home/site/wwwroot verbatim, with Oryx disabled via app settings.
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
@@ -65,30 +69,44 @@ jobs:
           set -euo pipefail
           npm ci
           npm run build           # vite -> dist/
-          rm -rf release
+          rm -rf release release.zip
           mkdir release
-          cp -R server public dist release/
+          # personas/ + prompts/ are read at request time by the API
+          # (loadPersonas, loadPrompt) via `path.resolve(__dirname, '../../..', X)`,
+          # so they must sit next to server/ in the deployed tree.
+          cp -R server public dist personas prompts release/
           cp package.json package-lock.json release/
           pushd release
           npm ci --omit=dev --no-audit --no-fund
           popd
           echo "=== release/ tree (top level) ==="
           ls -la release
-          echo "=== release/dist ==="
-          ls release/dist | head
           echo "=== release/node_modules (sanity) ==="
           ls release/node_modules | head
+          (cd release && zip -qr ../release.zip .)
+          ls -lh release.zip
+
+      - name: Log in to Azure CLI (Federated Credentials)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      # azure/webapps-deploy needs the App Service name as an input. azd writes
+      # bicep outputs (including WEB_NAME) to the env after `azd provision`, so
+      # we surface it as a step output the deploy action can reference.
+      - name: Resolve deploy target
+        id: target
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "name=$(azd env get-value WEB_NAME)" >> "$GITHUB_OUTPUT"
 
       - name: Deploy Application
-        run: azd deploy --no-prompt
-        env:
-          AZD_DEPLOY_TIMEOUT: '2400'
-          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
-          SPOTIFY_CLIENT_ID: ${{ secrets.SPOTIFY_CLIENT_ID }}
-          SPOTIFY_CLIENT_SECRET: ${{ secrets.SPOTIFY_CLIENT_SECRET }}
-          SPOTIFY_REDIRECT_URI: ${{ vars.SPOTIFY_REDIRECT_URI }}
-          OPEN_WEATHER_API_KEY: ${{ secrets.OPEN_WEATHER_API_KEY }}
-          LOCATION_IQ_API_KEY: ${{ secrets.LOCATION_IQ_API_KEY }}
-          REJSEPLANEN_ACCESS_ID: ${{ secrets.REJSEPLANEN_ACCESS_ID }}
-          ADMIN_EMAILS: ${{ vars.ADMIN_EMAILS }}
-        
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ steps.target.outputs.name }}
+          package: release.zip
+          type: zip
+
