@@ -1,4 +1,4 @@
-no# yaml-language-server: $schema=https://raw.githubusercontent.com/Azure/azure-dev/main/schemas/v1.0/azure.yaml.json
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Azure/azure-dev/main/schemas/v1.0/azure.yaml.json
 
 name: spotifai
 metadata:
@@ -8,15 +8,7 @@ services:
   web:
     project: .
     language: js
-    host: containerapp
-    docker:
-      path: Dockerfile
-      # Forward azd env values into the docker build as --build-arg so Vite can
-      # inline them into the client bundle. The server reads SPOTIFY_REDIRECT_URI
-      # from the Container App env at runtime (set via Bicep).
-      buildArgs:
-        - SPOTIFY_CLIENT_ID
-        - SPOTIFY_REDIRECT_URI
+    host: appservice
 
 hooks:
   postprovision:
@@ -24,15 +16,25 @@ hooks:
       shell: pwsh
       run: |
         Write-Host ""
-        Write-Host "Provisioning complete. Reminder: add the Container App FQDN below to your"
-        Write-Host "Spotify Developer Dashboard as an authorized redirect URI:"
-        Write-Host ""
+        Write-Host "Provisioning complete. App URL:"
         azd env get-value WEB_URI
+        Write-Host ""
+        Write-Host "To bind a custom domain (e.g. radio.codyhoover.com):"
+        Write-Host "  1. Add a CNAME to <defaultHostName> + an asuid TXT record in your DNS provider."
+        Write-Host "  2. Portal -> this App Service -> Custom domains -> Add custom domain."
+        Write-Host "  3. Add a Managed Certificate (free, auto-renews) and bind it."
+        Write-Host "  4. Update SPOTIFY_REDIRECT_URI to https://<your-domain> and rerun: azd provision"
+        Write-Host "  5. Update Spotify Developer dashboard redirect URIs to match."
     posix:
       shell: sh
       run: |
         echo ""
-        echo "Provisioning complete. Reminder: add the Container App FQDN below to your"
-        echo "Spotify Developer Dashboard as an authorized redirect URI:"
-        echo ""
+        echo "Provisioning complete. App URL:"
         azd env get-value WEB_URI
+        echo ""
+        echo "To bind a custom domain (e.g. radio.codyhoover.com):"
+        echo "  1. Add a CNAME to <defaultHostName> + an asuid TXT record in your DNS provider."
+        echo "  2. Portal -> this App Service -> Custom domains -> Add custom domain."
+        echo "  3. Add a Managed Certificate (free, auto-renews) and bind it."
+        echo "  4. Update SPOTIFY_REDIRECT_URI to https://<your-domain> and rerun: azd provision"
+        echo "  5. Update Spotify Developer dashboard redirect URIs to match."

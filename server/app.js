@@ -1,5 +1,11 @@
 const express = require("express");
 const app = express();
+// Azure App Service (and most PaaS reverse proxies) terminate TLS at the edge
+// and forward to the app as plain HTTP, setting X-Forwarded-Proto: https.
+// Without `trust proxy`, express-session sees req.protocol === 'http' and
+// refuses to set our `secure: true` cookie in production, so sign-in silently
+// fails to persist a session.
+app.set("trust proxy", 1);
 const session = require("express-session");
 const conn = require("./db/conn");
 const { User } = require("./db");

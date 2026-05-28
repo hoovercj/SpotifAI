@@ -179,16 +179,17 @@ Optional knobs:
 
 ---
 
-## Deployment (Azure Container Apps)
+## Deployment (Azure App Service)
 
-The repo ships a single-stage `Dockerfile` (multi-stage build, `node:22-alpine`, scale-to-zero friendly) and a full [Azure Developer CLI](https://aka.ms/azd) template under `infra/` that provisions:
+The repo ships an [Azure Developer CLI](https://aka.ms/azd) template under `infra/` that provisions:
 
-- **Azure Container Apps Environment** (Consumption plan) hosting the web app at `min-replicas=0, max-replicas=1`
-- **Azure Container Registry** (Basic SKU) for the built image
+- **Azure App Service** (Linux, Node 22, B1 Basic plan) hosting the web app at the default `*.azurewebsites.net` hostname
 - **Azure Database for PostgreSQL Flexible Server** (Burstable `Standard_B1ms`, v16, 32 GB) — eligible for the 12-month free offer on new subscriptions
-- **Log Analytics workspace** for Container App logs
-- A **user-assigned managed identity** with `AcrPull` on the registry — no admin credentials stored
-- All app secrets bound as **Container App secrets** (sourced into the runtime container as env vars)
+- **Log Analytics workspace** for App Service logs
+- A **system-assigned managed identity** on the web app for future Entra-auth scenarios
+- All app secrets stored as **App Service application settings** (encrypted at rest, injected as environment variables)
+
+Build happens server-side via Oryx: the deploy uploads a zip of the source, then Oryx runs `npm install` + `npm run build` so Vite produces `dist/`. No Dockerfile, no container registry.
 
 ### Deploy in one shot
 
@@ -201,23 +202,34 @@ azd env new spotifai-prod
 azd env set GOOGLE_API_KEY        <your-gemini-key>
 azd env set SPOTIFY_CLIENT_ID     <your-spotify-client-id>
 azd env set SPOTIFY_CLIENT_SECRET <your-spotify-client-secret>
+azd env set SPOTIFY_REDIRECT_URI  https://<your-app-name>.azurewebsites.net
 # Optional:
 azd env set OPEN_WEATHER_API_KEY    <key>
 azd env set LOCATION_IQ_API_KEY     <key>
 azd env set REJSEPLANEN_ACCESS_ID   <key>
 
-# 3. Provision + build + deploy in one go
+# 3. Provision + deploy in one go
 azd up
 ```
 
 The Postgres admin password and the Express `SESSION_SECRET` are auto-generated and stored in your azd environment.
 
-After `azd up` finishes it prints the Container App URL. **Add that URL to your Spotify Developer dashboard** as an additional redirect URI before signing in.
+After `azd up` finishes it prints the App Service URL. **Add that URL to your Spotify Developer dashboard** as an additional redirect URI before signing in.
+
+### Custom domain (one-time, in the portal)
+
+Custom domain bindings are intentionally not managed in Bicep — child `hostNameBindings` survive future `azd provision` runs, so a portal-set binding is durable and saves a lot of template complexity.
+
+1. In your DNS provider, add a `CNAME` from your subdomain (e.g. `radio`) to `<app-name>.azurewebsites.net`, plus a `TXT` record at `asuid.<subdomain>` containing the Custom Domain Verification ID shown in the portal.
+2. In the Azure Portal → this App Service → **Custom domains → + Add custom domain** → enter the hostname → validate → add.
+3. Click **Add managed certificate** (free, auto-renews) → bind it.
+4. Update the OAuth redirect: `azd env set SPOTIFY_REDIRECT_URI https://radio.example.com` and rerun `azd provision`.
+5. Add the new URL to your Spotify Developer dashboard's redirect URIs.
 
 ### Iterating
 
-- `azd deploy` — rebuilds the image, pushes to ACR, and rolls the Container App
-- `azd provision` — re-applies Bicep changes only
+- `azd deploy` — zips the source, uploads it, App Service rebuilds + restarts
+- `azd provision` — re-applies Bicep changes only (app settings, plan SKU, etc.)
 - `azd down` — tears everything down (use when you're done experimenting)
 
 ---

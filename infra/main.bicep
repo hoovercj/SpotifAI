@@ -68,16 +68,6 @@ module monitoring 'modules/monitoring.bicep' = {
   }
 }
 
-module registry 'modules/registry.bicep' = {
-  name: 'registry'
-  scope: rg
-  params: {
-    location: location
-    tags: tags
-    resourceToken: resourceToken
-  }
-}
-
 module postgres 'modules/postgresql.bicep' = {
   name: 'postgresql'
   scope: rg
@@ -90,27 +80,14 @@ module postgres 'modules/postgresql.bicep' = {
   }
 }
 
-module containerEnv 'modules/containerEnv.bicep' = {
-  name: 'container-env'
+module web 'modules/appService.bicep' = {
+  name: 'web'
   scope: rg
   params: {
     location: location
     tags: tags
     resourceToken: resourceToken
     logAnalyticsWorkspaceId: monitoring.outputs.logAnalyticsWorkspaceId
-  }
-}
-
-module web 'modules/containerApp.bicep' = {
-  name: 'web'
-  scope: rg
-  params: {
-    location: location
-    tags: union(tags, { 'azd-service-name': 'web' })
-    resourceToken: resourceToken
-    containerAppEnvId: containerEnv.outputs.environmentId
-    containerRegistryName: registry.outputs.name
-    containerRegistryLoginServer: registry.outputs.loginServer
     databaseUrl: postgres.outputs.connectionString
     googleApiKey: googleApiKey
     spotifyClientId: spotifyClientId
@@ -125,6 +102,5 @@ module web 'modules/containerApp.bicep' = {
 
 output AZURE_LOCATION string = location
 output AZURE_RESOURCE_GROUP string = rg.name
-output AZURE_CONTAINER_REGISTRY_ENDPOINT string = registry.outputs.loginServer
-output AZURE_CONTAINER_REGISTRY_NAME string = registry.outputs.name
 output WEB_URI string = web.outputs.uri
+output WEB_DEFAULT_HOSTNAME string = web.outputs.defaultHostName

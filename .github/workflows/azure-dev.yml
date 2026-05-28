@@ -43,6 +43,10 @@ jobs:
           GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
           SPOTIFY_CLIENT_ID: ${{ secrets.SPOTIFY_CLIENT_ID }}
           SPOTIFY_CLIENT_SECRET: ${{ secrets.SPOTIFY_CLIENT_SECRET }}
+          SPOTIFY_REDIRECT_URI: ${{ vars.SPOTIFY_REDIRECT_URI }}
+          OPEN_WEATHER_API_KEY: ${{ secrets.OPEN_WEATHER_API_KEY }}
+          LOCATION_IQ_API_KEY: ${{ secrets.LOCATION_IQ_API_KEY }}
+          REJSEPLANEN_ACCESS_ID: ${{ secrets.REJSEPLANEN_ACCESS_ID }}
 
       - name: Deploy Application
         run: azd deploy --no-prompt
@@ -50,4 +54,8 @@ jobs:
           GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
           SPOTIFY_CLIENT_ID: ${{ secrets.SPOTIFY_CLIENT_ID }}
           SPOTIFY_CLIENT_SECRET: ${{ secrets.SPOTIFY_CLIENT_SECRET }}
+          SPOTIFY_REDIRECT_URI: ${{ vars.SPOTIFY_REDIRECT_URI }}
+          OPEN_WEATHER_API_KEY: ${{ secrets.OPEN_WEATHER_API_KEY }}
+          LOCATION_IQ_API_KEY: ${{ secrets.LOCATION_IQ_API_KEY }}
+          REJSEPLANEN_ACCESS_ID: ${{ secrets.REJSEPLANEN_ACCESS_ID }}
         
