@@ -20,6 +20,11 @@ smoke-output/
 # Pre-built deploy artifact assembled by `npm run package` for App Service.
 .deploy/
 
+# Slim deploy artifact assembled in CI by the "Build artifact" step in
+# .github/workflows/azure-dev.yml. azd ships this directly via `dist: release`
+# in azure.yaml.
+release/
+
 # Local design/research scratch space (e.g. station-cover-design pipeline).
 # Everything under .tmp/ is exploratory output meant for human review,
 # regenerated on demand from `scripts/design-station-covers.js`.

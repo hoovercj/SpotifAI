@@ -9,6 +9,11 @@ services:
     project: .
     language: js
     host: appservice
+    # CI ('Build artifact' step in .github/workflows/azure-dev.yml) populates
+    # `release/` with the exact tree to deploy: server/, public/, dist/,
+    # package.json, package-lock.json, and a production-only node_modules.
+    # azd zips this folder and ships it directly to /home/site/wwwroot.
+    dist: release
 
 hooks:
   postprovision:

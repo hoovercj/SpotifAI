@@ -50,6 +50,35 @@ jobs:
           REJSEPLANEN_ACCESS_ID: ${{ secrets.REJSEPLANEN_ACCESS_ID }}
           ADMIN_EMAILS: ${{ vars.ADMIN_EMAILS }}
 
+      # Build a slim, self-contained artifact in ./release. azd's `dist:
+      # release` in azure.yaml makes it zip *only* this folder and ship it
+      # straight to /home/site/wwwroot (no Oryx, no server-side npm install).
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Build artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npm run build           # vite -> dist/
+          rm -rf release
+          mkdir release
+          cp -R server public dist release/
+          cp package.json package-lock.json release/
+          pushd release
+          npm ci --omit=dev --no-audit --no-fund
+          popd
+          echo "=== release/ tree (top level) ==="
+          ls -la release
+          echo "=== release/dist ==="
+          ls release/dist | head
+          echo "=== release/node_modules (sanity) ==="
+          ls release/node_modules | head
+
       - name: Deploy Application
         run: azd deploy --no-prompt
         env:

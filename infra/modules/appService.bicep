@@ -56,13 +56,12 @@ var optionalSettings = filter([
 ], s => !empty(s.value))
 
 var baseSettings = [
-  // Let Oryx run `npm install` + `npm run build` + `npm prune --production`
-  // on the App Service host after the zip is extracted.
-  { name: 'SCM_DO_BUILD_DURING_DEPLOYMENT', value: 'true' }
-  // Force `npm install` to include devDependencies so Oryx can run `vite build`
-  // (vite + plugins live in devDeps). Oryx then runs `npm prune --production`
-  // afterwards to strip them before the container starts.
-  { name: 'NPM_CONFIG_PRODUCTION', value: 'false' }
+  // CI builds a slim self-contained artifact in `release/` (server + dist +
+  // public + production node_modules) and azd zip-deploys it as-is. Oryx must
+  // stay disabled so it doesn't try to re-run `npm install` / `npm run build`
+  // on the host.
+  { name: 'SCM_DO_BUILD_DURING_DEPLOYMENT', value: 'false' }
+  { name: 'ENABLE_ORYX_BUILD', value: 'false' }
   { name: 'WEBSITE_NODE_DEFAULT_VERSION', value: '~22' }
   // NODE_ENV controls Express session cookie `secure` flag, etc.
   { name: 'NODE_ENV', value: 'production' }
