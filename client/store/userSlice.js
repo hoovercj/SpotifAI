@@ -1,5 +1,11 @@
 import { createSlice } from '@reduxjs/toolkit'
 import axios from 'axios'
+import { clearPersistedPlayer } from './persistPlayer'
+import {
+  clearCurrentSession,
+  setCurrentContext,
+} from './playerSlice'
+import { setCurrentDj } from './djsSlice'
 
 const initialState = {
   code: null,
@@ -107,6 +113,13 @@ export const logoutUser = () => async (dispatch) => {
   } catch (err) {
     console.warn('Server logout failed:', err?.response?.status, err?.message)
   }
+  // Reset the persistable player slice fields BEFORE wiping localStorage,
+  // otherwise the next subscriber tick would re-persist the previous
+  // user's session/context/DJ on top of the empty snapshot we just wrote.
+  dispatch(clearCurrentSession())
+  dispatch(setCurrentContext(null))
+  dispatch(setCurrentDj(null))
+  clearPersistedPlayer()
   dispatch(clearUser())
 }
 

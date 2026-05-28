@@ -53,6 +53,11 @@ export default function DjAvatarTile({
   dj,
   size = "md",
   selected = false,
+  // `current` marks the DJ that is *actively hosting right now*. It
+  // shows a subtler neutral ring so the user can still spot the host
+  // in the picker grid without it competing with `selected` (which is
+  // the DJ the user is currently inspecting for a swap).
+  current = false,
   showName = false,
   onClick,
   className = "",
@@ -61,6 +66,8 @@ export default function DjAvatarTile({
   const sizeCls = SIZE_CLASSES[size] || SIZE_CLASSES.md
   const ringCls = selected
     ? "ring-2 ring-fuchsia-500 ring-offset-2 ring-offset-background"
+    : current
+    ? "ring-2 ring-zinc-400/70 ring-offset-2 ring-offset-background"
     : "ring-1 ring-border/40"
 
   const img = dj?.details?.image || null

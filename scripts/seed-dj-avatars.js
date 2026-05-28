@@ -213,6 +213,10 @@ async function main() {
     console.log(`${tag} ${bold(p.djName)} ${dim(`(${p.slug})`)}`)
     if (flags['dry-run']) {
       console.log(dim(`  would write → ${path.relative(PROJECT_ROOT, outputPath)}`))
+      console.log(dim('  prompt:'))
+      const prompt = buildPrompt(p)
+      console.log(prompt.split('\n').map((line) => `    ${line}`).join('\n'))
+      console.log('')
       continue
     }
     const t0 = Date.now()

@@ -262,8 +262,15 @@ function getJobStatus(jobId) {
   return { status: "failed", error: job.error || "Generation failed" }
 }
 
+const {
+  resolveStationCover,
+  resolveAllStationCovers,
+} = require("./resolveStationCover")
+
 module.exports = {
   startStation,
   getJobStatus,
   getWeekKey,
+  resolveStationCover,
+  resolveAllStationCovers,
 }

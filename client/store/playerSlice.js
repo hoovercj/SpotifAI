@@ -55,8 +55,28 @@ const initialState = {
   volume: 0.7,
   isMuted: false,
 
+  // DJ-only volume multiplier (0–1). Applied to the DJ overlay's <audio>
+  // element on top of the master `volume`, so dropping it makes the DJ
+  // quieter relative to the music without affecting the Spotify track
+  // playback. Default 1.0 → DJ plays at full master volume (parity with
+  // pre-slider behavior). Master mute (`isMuted`) still silences
+  // everything regardless of djVolume.
+  djVolume: 1.0,
+
   // UI: whether the full-screen Now Playing drawer is open
   nowPlayingOpen: false,
+
+  // UI hand-off: when the DJ Action Bar's left avatar is tapped we want
+  // NowPlayingScreen to open AND auto-expand the DJ picker. Set true by
+  // requestDjPicker(); NowPlayingScreen consumes + clears it on render.
+  nowPlayingPickerRequest: false,
+
+  // Refresh rehydration: when the page is reloaded, the persistence
+  // layer restores currentSession + currentContext immediately, but the
+  // DJ persona has to wait for djs.allDjs to load. We park the id here
+  // so PlayerProvider can promote it to djs.currentDj as soon as the
+  // roster arrives, then clear it.
+  pendingRehydrateDjId: null,
 
   // Misc
   loading: false,
@@ -206,6 +226,15 @@ const playerSlice = createSlice({
     setVolume: (state, action) => {
       state.volume = action.payload
     },
+    setDjVolume: (state, action) => {
+      // Clamp defensively — the underlying HTMLMediaElement.volume API
+      // throws on values outside [0,1], and the slider is the only
+      // intended caller so anything else is a bug we'd rather swallow.
+      const v = Number(action.payload)
+      if (Number.isFinite(v)) {
+        state.djVolume = Math.max(0, Math.min(1, v))
+      }
+    },
     setIsMuted: (state, action) => {
       state.isMuted = action.payload
     },
@@ -221,11 +250,34 @@ const playerSlice = createSlice({
     setNowPlayingOpen: (state, action) => {
       state.nowPlayingOpen = Boolean(action.payload)
     },
+    // Open NowPlaying AND ask it to expand the DJ picker on next render.
+    // Used by the DJ Action Bar avatar tap.
+    requestDjPicker: (state) => {
+      state.nowPlayingOpen = true
+      state.nowPlayingPickerRequest = true
+    },
+    clearDjPickerRequest: (state) => {
+      state.nowPlayingPickerRequest = false
+    },
     setPlayerLoading: (state, action) => {
       state.loading = action.payload
     },
     setPlayerError: (state, action) => {
       state.error = action.payload
+    },
+    // Rehydrate the persistable subset on app boot. Only touches the
+    // fields the persistence layer manages; everything else (track,
+    // position, isPlaying) is left to the SDK reconnect to refill.
+    hydratePersisted: (state, action) => {
+      const payload = action.payload || {}
+      if (payload.currentSession) state.currentSession = payload.currentSession
+      if (payload.currentContext) state.currentContext = payload.currentContext
+      if (payload.currentDjId != null) {
+        state.pendingRehydrateDjId = payload.currentDjId
+      }
+    },
+    clearPendingRehydrateDjId: (state) => {
+      state.pendingRehydrateDjId = null
     },
   },
 })
@@ -248,13 +300,18 @@ export const {
   setCurrentDj,
   setDjSpeaking,
   setVolume,
+  setDjVolume,
   setIsMuted,
   toggleMuted,
   openNowPlaying,
   closeNowPlaying,
   setNowPlayingOpen,
+  requestDjPicker,
+  clearDjPickerRequest,
   setPlayerLoading,
   setPlayerError,
+  hydratePersisted,
+  clearPendingRehydrateDjId,
 } = playerSlice.actions
 
 export default playerSlice.reducer

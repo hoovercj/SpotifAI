@@ -19,12 +19,20 @@
 const fs = require('node:fs')
 const path = require('node:path')
 const { convertFileToDataURI } = require('./convertMP3FileToDataURI')
+const { buildIntroText } = require('./buildIntroText')
 
 const PERSONAS_DIR = path.resolve(__dirname, '../../..', 'personas')
 // PNGs are baked by `scripts/seed-dj-avatars.js` into the public assets
 // folder so they're web-servable as static files AND inlineable as data
 // URIs from here. Single canonical location, one source of truth.
 const IMAGE_DIR = path.resolve(__dirname, '../../..', 'public', 'images', 'djs')
+// Voice intro WAVs baked by `scripts/seed-dj-intros.js`. Served by
+// Express as static files under `/audio/`, so the URL exposed to the
+// client is just the basename prefixed with `/audio/`.
+const INTRO_DIR = path.resolve(__dirname, '../../..', 'public', 'audio')
+function introFilename(slug) {
+  return `dj-intro-${slug}.wav`
+}
 
 // Collapse soft-wrapped paragraphs into single lines (so a .md file can
 // wrap nicely without changing the prompt). Blank lines stay as paragraph
@@ -93,6 +101,13 @@ function parseFile(filePath) {
     id: Number(front.id),
     slug: front.slug,
     djName: front.djName,
+    // Optional: phonetic spelling for the on-air name when the
+    // brand handle doesn't TTS cleanly (e.g. "M-Quake" gets read
+    // as "Mac-Quake" by Gemini, so we set `spokenName: Em Quake`
+    // in that persona's frontmatter). The seed-dj-intros script
+    // prefers this over `djName` when constructing the intro
+    // transcript; UI surfaces always use `djName`.
+    spokenName: front.spokenName || null,
     voiceID: front.voiceID,
     image: front.image,
     genres,
@@ -132,6 +147,18 @@ async function resolveImage(imageFile) {
   return convertFileToDataURI(fullPath, 'png')
 }
 
+// Resolve a persona's pregenerated voice-intro clip to a public URL,
+// or `null` when no clip has been baked yet. The picker UI uses this
+// to decide whether to surface a "Preview voice" button, so we keep
+// this purely existence-based (no caching, no error throwing) — the
+// next call after `scripts/seed-dj-intros.js` runs will pick up the
+// new file with no server restart needed.
+function resolveIntroUrl(slug) {
+  if (!slug) return null
+  const fp = path.join(INTRO_DIR, introFilename(slug))
+  return fs.existsSync(fp) ? `/audio/${introFilename(slug)}` : null
+}
+
 // Returns the array of persona objects in the legacy
 // `{ id, djName, details: { voiceID, djStyle, signaturePhrases, context, image } }`
 // shape with `image` resolved to a data URI. The post-bump fields
@@ -155,6 +182,14 @@ async function loadPersonas() {
         appearance: m.appearance,
         scene: m.scene,
         image: await resolveImage(m.image),
+        introUrl: resolveIntroUrl(m.slug),
+        // The exact transcript that was sent to Gemini when the
+        // intro WAV was baked. Surfaced in the picker bio panel
+        // so users see what the Audition clip will say, and so
+        // the displayed text is guaranteed in sync with the
+        // audio (both use buildIntroText() over the same
+        // metadata). null when no intro has been baked yet.
+        introText: resolveIntroUrl(m.slug) ? buildIntroText(m) : null,
       },
     }))
   )
@@ -196,6 +231,10 @@ async function loadPersonasWithExperiments(experimentsDir) {
           appearance: override.appearance,
           scene: override.scene,
           image: await resolveImage(override.image),
+          introUrl: resolveIntroUrl(override.slug),
+          introText: resolveIntroUrl(override.slug)
+            ? buildIntroText(override)
+            : null,
         },
       }
     })

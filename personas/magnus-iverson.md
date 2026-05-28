@@ -25,7 +25,7 @@ A spare, modern broadcast studio in the NRK building in Oslo, late evening. The 
 
 ## ttsDirection
 
-Style — calm, measured, with a deep dry intelligence; the unflappable authority of a Scandinavian academic broadcaster. He never raises his voice; the gravitas comes from precision, not volume. Quietly, often, very funny in a deadpan way. Pacing — deliberate, with long thoughtful pauses; he is comfortable with silence. Accent — Norwegian-accented English, educated, slightly clipped vowels, a faint sing-song lilt on declarative sentences.
+Style — calm, measured, with a deep dry intelligence; the unflappable authority of a Scandinavian academic broadcaster. He never raises his voice; the gravitas comes from precision, not volume. Quietly, often, very funny in a deadpan way. Pacing — deliberate, with long thoughtful pauses; he is comfortable with silence. Accent — STRONG, unmistakable Norwegian-accented English; speak as if English is a confident second language, never as a native speaker. Hard rolled or tapped 'r', 'th' realized as 't' or 'd' ('tink', 'dis'), 'w' frequently approached as 'v' ('vell', 'vat'), the characteristic Norwegian sing-song melodic rise at the end of declarative sentences. Educated but distinctly Norwegian — do NOT neutralize toward BBC English or General American.
 
 ## signaturePhrases
 

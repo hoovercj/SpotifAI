@@ -3,9 +3,11 @@
 // We mirror the visual side of the station catalog here (id, name, gradient
 // hint) so SearchTab can render station cards without an extra round-trip.
 // The actual Gemini prompts live server-side in
-// `server/services/aiStations/catalog.js` — that's the canonical source for
-// per-station prompt text. Whatever station ids appear here MUST also exist
-// server-side; otherwise tapping a station card 404s.
+// `server/services/aiStations/catalog.js` (genre axis) and
+// `server/services/sessions/moodCatalog.js` (mood axis) — those are the
+// canonical sources for per-station prompt text. Whatever station ids
+// appear here MUST also exist server-side; otherwise tapping a station
+// card 404s.
 
 const STATIONS_BY_GENRE_ID = {
   pop: [
@@ -211,10 +213,119 @@ const STATIONS_BY_GENRE_ID = {
   ],
 }
 
+// ---------------------------------------------------------------------
+// Mood-axis stations
+// ---------------------------------------------------------------------
+// These mirror `server/services/sessions/moodCatalog.js`. Keep the ids
+// in sync — tapping a station here builds a
+// `{ type: "mood", moodId, stationId }` seed that the server resolves
+// against the same map. Names and gradients are purely visual; only
+// `id` participates in the contract.
+
+const STATIONS_BY_MOOD_ID = {
+  workout: [
+    { id: "hiit", name: "HIIT Bangers", gradient: ["#dc2626", "#f97316"] },
+    { id: "lift", name: "Lift Heavy", gradient: ["#7f1d1d", "#0f172a"] },
+    { id: "run", name: "Run Pace", gradient: ["#f97316", "#fde047"] },
+    { id: "pump-pop", name: "Pump-Up Pop", gradient: ["#ec4899", "#f97316"] },
+    { id: "yoga", name: "Yoga & Stretch", gradient: ["#10b981", "#a3e635"] },
+  ],
+
+  party: [
+    { id: "top40", name: "Top 40 Party", gradient: ["#f472b6", "#9333ea"] },
+    { id: "throwback", name: "Throwback Party", gradient: ["#9333ea", "#1e3a8a"] },
+    { id: "latin", name: "Latin Party", gradient: ["#f43f5e", "#9333ea"] },
+    { id: "hiphop", name: "Hip-Hop Party", gradient: ["#ec4899", "#0f172a"] },
+    { id: "dancefloor", name: "Dance Floor", gradient: ["#06b6d4", "#9333ea"] },
+  ],
+
+  drive: [
+    { id: "highway", name: "Open Highway", gradient: ["#ea580c", "#7c2d12"] },
+    { id: "roadtrip-pop", name: "Road Trip Pop", gradient: ["#fde047", "#ea580c"] },
+    { id: "country-cruise", name: "Country Cruise", gradient: ["#92400e", "#fbbf24"] },
+    { id: "indie-rolling", name: "Indie Rolling", gradient: ["#ea580c", "#0c4a6e"] },
+    { id: "night-drive", name: "Night Drive", gradient: ["#1e1b4b", "#0f172a"] },
+  ],
+
+  focus: [
+    { id: "deep-work", name: "Deep Work", gradient: ["#1e40af", "#0d9488"] },
+    { id: "neoclassical", name: "Modern Classical", gradient: ["#1e3a8a", "#475569"] },
+    { id: "instrumental-beats", name: "Instrumental Beats", gradient: ["#0f766e", "#1e3a8a"] },
+    { id: "film-scores", name: "Film Scores", gradient: ["#0c4a6e", "#0f172a"] },
+    { id: "post-rock", name: "Post-Rock", gradient: ["#0d9488", "#1e40af"] },
+  ],
+
+  chill: [
+    { id: "sunday-acoustic", name: "Sunday Acoustic", gradient: ["#67e8f9", "#6366f1"] },
+    { id: "smooth-rnb", name: "Smooth R&B", gradient: ["#6366f1", "#a21caf"] },
+    { id: "chill-indie", name: "Chill Indie", gradient: ["#22d3ee", "#a78bfa"] },
+    { id: "coffee-jazz", name: "Coffee Shop Jazz", gradient: ["#fbbf24", "#7c2d12"] },
+    { id: "mellow-beats", name: "Mellow Beats", gradient: ["#06b6d4", "#1e3a8a"] },
+  ],
+
+  rainy: [
+    { id: "indie-melancholy", name: "Indie Melancholy", gradient: ["#94a3b8", "#475569"] },
+    { id: "quiet-jazz", name: "Quiet Jazz", gradient: ["#1e293b", "#0f172a"] },
+    { id: "slowcore", name: "Slowcore", gradient: ["#475569", "#1e1b4b"] },
+    { id: "acoustic-ache", name: "Acoustic Ache", gradient: ["#94a3b8", "#78350f"] },
+    { id: "ambient-rain", name: "Ambient Rain", gradient: ["#64748b", "#0c4a6e"] },
+  ],
+
+  sleep: [
+    { id: "piano", name: "Piano for Sleep", gradient: ["#312e81", "#0f172a"] },
+    { id: "strings", name: "Sleep Strings", gradient: ["#1e1b4b", "#3730a3"] },
+    { id: "ambient", name: "Ambient Sleep", gradient: ["#0f172a", "#020617"] },
+    { id: "gentle-acoustic", name: "Gentle Acoustic", gradient: ["#3730a3", "#1e293b"] },
+    { id: "choral", name: "Choral Sleep", gradient: ["#4338ca", "#0f172a"] },
+  ],
+
+  feelgood: [
+    { id: "sunshine-pop", name: "Sunshine Pop", gradient: ["#fde047", "#f97316"] },
+    { id: "motown", name: "Motown Joy", gradient: ["#ea580c", "#7c2d12"] },
+    { id: "reggae-vibes", name: "Reggae Vibes", gradient: ["#facc15", "#16a34a"] },
+    { id: "80s-bright", name: "80s Bright", gradient: ["#ec4899", "#06b6d4"] },
+    { id: "funk-fix", name: "Funk Fix", gradient: ["#a855f7", "#f97316"] },
+  ],
+
+  romance: [
+    { id: "slow-burn-rnb", name: "Slow Burn R&B", gradient: ["#f43f5e", "#9f1239"] },
+    { id: "classic-soul", name: "Classic Soul Love", gradient: ["#9f1239", "#7c2d12"] },
+    { id: "indie-love", name: "Indie Love Songs", gradient: ["#fb7185", "#7e22ce"] },
+    { id: "latin-romance", name: "Latin Romance", gradient: ["#dc2626", "#9d174d"] },
+    { id: "crooners", name: "Crooner Standards", gradient: ["#facc15", "#7c2d12"] },
+  ],
+
+  sad: [
+    { id: "sad-girl-pop", name: "Sad Girl Pop", gradient: ["#475569", "#3730a3"] },
+    { id: "heartbreak-country", name: "Heartbreak Country", gradient: ["#78350f", "#475569"] },
+    { id: "blues-catharsis", name: "Blues Catharsis", gradient: ["#1e3a8a", "#312e81"] },
+    { id: "cathartic-indie", name: "Cathartic Indie", gradient: ["#475569", "#7f1d1d"] },
+    { id: "tear-jerker-jazz", name: "Tear-Jerker Standards", gradient: ["#0f172a", "#3730a3"] },
+  ],
+
+  morning: [
+    { id: "slow-wake", name: "Slow Wake", gradient: ["#fda4af", "#fbbf24"] },
+    { id: "coffee-jazz", name: "Morning Coffee Jazz", gradient: ["#fbbf24", "#92400e"] },
+    { id: "sunday-hymns", name: "Sunday Hymns", gradient: ["#fde68a", "#a16207"] },
+    { id: "soft-latin", name: "Soft Latin Morning", gradient: ["#fb923c", "#a16207"] },
+    { id: "folk-sunrise", name: "Folk Sunrise", gradient: ["#fef3c7", "#f59e0b"] },
+  ],
+
+  throwback: [
+    { id: "90s", name: "90s Throwback", gradient: ["#fbbf24", "#92400e"] },
+    { id: "2000s", name: "2000s Throwback", gradient: ["#a855f7", "#facc15"] },
+    { id: "2010s", name: "2010s Throwback", gradient: ["#22d3ee", "#a855f7"] },
+    { id: "80s", name: "80s Throwback", gradient: ["#ec4899", "#06b6d4"] },
+    { id: "one-hit", name: "One-Hit Wonders", gradient: ["#fde047", "#dc2626"] },
+  ],
+}
+
 /**
- * Resolve a free-text query (the search box, or a tapped genre tile) to a
- * `{ genreId, stations }` bundle, if the query matches one of our known
- * genres. Returns `null` for anything that isn't a clean genre match.
+ * Resolve a free-text query (the search box, or a tapped genre / mood
+ * tile) to a `{ axis, axisId, stations }` bundle. `axis` is "genre" or
+ * "mood" and tells AIStationsRow which seed shape to build when a
+ * station card is tapped. Returns `null` for anything that isn't a
+ * clean match against either catalog.
  */
 export function stationsForQuery(query) {
   const normalized = String(query || "")
@@ -222,9 +333,10 @@ export function stationsForQuery(query) {
     .toLowerCase()
   if (!normalized) return null
 
+  // ---- Genre axis -------------------------------------------------
   // Aliases live alongside each genreId so "hip hop", "hiphop", and
   // "hip-hop" all resolve to the same set.
-  const aliases = {
+  const genreAliases = {
     pop: ["pop"],
     rock: ["rock"],
     hiphop: ["hip-hop", "hip hop", "hiphop", "rap"],
@@ -254,12 +366,38 @@ export function stationsForQuery(query) {
     holiday: ["holiday", "christmas", "xmas"],
   }
 
-  for (const [genreId, names] of Object.entries(aliases)) {
+  for (const [genreId, names] of Object.entries(genreAliases)) {
     if (names.includes(normalized)) {
       const stations = STATIONS_BY_GENRE_ID[genreId]
-      if (stations?.length) return { genreId, stations }
+      if (stations?.length) return { axis: "genre", axisId: genreId, stations }
       // Genre is known but we don't have stations yet — surface nothing
       // rather than a sad empty row.
+      return null
+    }
+  }
+
+  // ---- Mood axis --------------------------------------------------
+  // Mood names from `client/Components/tabs/moods.js` lower-cased,
+  // plus a handful of natural-language variants.
+  const moodAliases = {
+    workout: ["workout", "exercise", "gym"],
+    party: ["party"],
+    drive: ["drive", "driving", "road trip", "roadtrip"],
+    focus: ["focus", "study", "studying", "work", "concentration"],
+    chill: ["chill", "relax", "relaxing"],
+    rainy: ["rainy", "rainy day", "rain"],
+    sleep: ["sleep", "sleeping", "bedtime"],
+    feelgood: ["feel good", "feelgood", "happy", "good vibes"],
+    romance: ["romance", "romantic", "love"],
+    sad: ["sad", "melancholy", "blue"],
+    morning: ["morning", "wake up"],
+    throwback: ["throwback", "throwbacks", "nostalgia"],
+  }
+
+  for (const [moodId, names] of Object.entries(moodAliases)) {
+    if (names.includes(normalized)) {
+      const stations = STATIONS_BY_MOOD_ID[moodId]
+      if (stations?.length) return { axis: "mood", axisId: moodId, stations }
       return null
     }
   }

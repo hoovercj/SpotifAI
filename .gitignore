@@ -18,3 +18,8 @@ debug/debugTracker.json
 
 # AI smoke test artifacts (transcripts + WAVs from scripts/smoke.js)
 smoke-output/
+
+# Local design/research scratch space (e.g. station-cover-design pipeline).
+# Everything under .tmp/ is exploratory output meant for human review,
+# regenerated on demand from `scripts/design-station-covers.js`.
+.tmp/

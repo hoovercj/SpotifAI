@@ -288,10 +288,11 @@ export default function SearchTab() {
       {/* Empty state */}
       {showEmpty && <BrowseAllGrid />}
 
-      {/* AI Stations row — only when the query matches a known genre */}
+      {/* AI Stations row — only when the query matches a known genre or mood */}
       {!showEmpty && stationsBundle && (
         <AIStationsRow
-          genreId={stationsBundle.genreId}
+          axis={stationsBundle.axis}
+          axisId={stationsBundle.axisId}
           stations={stationsBundle.stations}
         />
       )}

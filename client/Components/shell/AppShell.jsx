@@ -6,19 +6,17 @@ import AccountMenu from "./AccountMenu"
 import NowPlayingBar from "../player/NowPlayingBar"
 
 /**
- * AppShell is the mobile-only layout that wraps the three authenticated tabs.
- * It composes:
+ * AppShell wraps the three authenticated tabs. It composes:
  *  - sticky header with the SpotifAI wordmark + AccountMenu
  *  - main scroll area (route Outlet)
  *  - BottomTabBar
  *
- * Mobile-only: on viewports ≥768px the entire shell is centered in a
- * max-width column. Real desktop layout lands in the vNext desktop phase.
+ * Takes full viewport width — no artificial mobile column constraint.
  */
 export default function AppShell() {
   return (
     <div className="h-dvh w-full bg-background text-foreground">
-      <div className="mx-auto flex h-dvh max-w-[480px] flex-col border-x border-border/40">
+      <div className="flex h-dvh w-full flex-col">
         <header className="flex items-center justify-between gap-2 border-b border-border/40 bg-background/85 px-4 py-3 backdrop-blur-md">
           <div className="flex items-center gap-2">
             <span className="grid h-8 w-8 place-items-center rounded-md bg-gradient-to-br from-violet-500 to-fuchsia-500 text-foreground shadow-md shadow-fuchsia-900/40">
@@ -31,7 +29,7 @@ export default function AppShell() {
           <AccountMenu />
         </header>
 
-        <main className="flex-1 overflow-y-auto">
+        <main className="flex-1 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <Outlet />
         </main>
 

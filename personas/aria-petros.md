@@ -2,7 +2,7 @@
 id: 24
 slug: aria-petros
 djName: Aria Petros
-voiceID: Enceladus
+voiceID: Callirrhoe
 image: aria-petros.png
 genres: classical, stagescreen
 ---

@@ -5,7 +5,9 @@
  * playlist — collapses into one of five seed shapes:
  *
  *   { type: "station",  genreId,   stationId }
- *   { type: "mood",     moodId }
+ *   { type: "mood",     moodId,    stationId? }   // stationId optional;
+ *                                                  // defaults to the
+ *                                                  // mood's first station.
  *   { type: "track",    spotifyUri }     // spotify:track:XYZ
  *   { type: "artist",   spotifyUri }     // spotify:artist:XYZ
  *   { type: "playlist", spotifyUri }     // spotify:playlist:XYZ
@@ -32,7 +34,12 @@ function seedKey(seed) {
     }
     case "mood": {
       if (!seed.moodId) throw new Error("seedKey: mood seed requires moodId")
-      return `mood:${seed.moodId}`
+      // stationId is optional — when present, two different stations
+      // within the same mood get distinct keys (so the recent_sessions
+      // list shows them separately, and concurrent jobs don't coalesce).
+      return seed.stationId
+        ? `mood:${seed.moodId}/${seed.stationId}`
+        : `mood:${seed.moodId}`
     }
     case "track":
     case "artist":

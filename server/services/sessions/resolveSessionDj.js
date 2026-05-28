@@ -164,10 +164,18 @@ async function resolveSessionDj({
     return entry.station.djId || HOUSE_DJ_ID
   }
 
-  // 5. Mood seed → moodCatalog pin.
+  // 5. Mood seed → moodCatalog pin. Stations within a mood each carry
+  //    their own DJ; if no stationId is supplied, the first station's DJ
+  //    is used (matches the catalog's "default station" convention).
   if (seed.type === "mood") {
     const mood = lookupMood(seed.moodId)
-    if (mood?.djId) return mood.djId
+    if (mood?.stations?.length) {
+      const station =
+        (seed.stationId &&
+          mood.stations.find((s) => s.id === seed.stationId)) ||
+        mood.stations[0]
+      if (station?.djId) return station.djId
+    }
     // Unknown mood id falls through to LLM rather than throwing —
     // playback shouldn't die on a typo in the client.
   }

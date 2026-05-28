@@ -12,7 +12,7 @@
  *     meta:   { name, imageUrl },
  *   }
  */
-const { lookupMood } = require("../moodCatalog")
+const { lookupMood, lookupMoodStation } = require("../moodCatalog")
 const { loadPrompt } = require("../../utl/loadPrompt")
 const {
   geminiToSpotifyTracks,
@@ -40,11 +40,27 @@ async function fromMood({ seed, spotifyAccessToken, excludeUris = [] }) {
     err.status = 404
     throw err
   }
+  const station = lookupMoodStation(seed.moodId, seed.stationId)
+  if (!station) {
+    const err = new Error(
+      `fromMood: unknown stationId "${seed.stationId}" for mood "${seed.moodId}"`
+    )
+    err.status = 404
+    throw err
+  }
+
+  // "Mood Name — Station Name" is what we surface to the user (NowPlaying
+  // tile, recent sessions row). The orchestrator also feeds this to the DJ
+  // intro prompt as `context.name`, so keep it human-readable.
+  const displayName =
+    station.id === mood.stations[0].id
+      ? mood.name
+      : `${mood.name} \u2014 ${station.name}`
 
   const excludeList = buildExcludeList(excludeUris)
   const prompt = loadPrompt("session-tracks-mood", {
-    moodName: mood.name,
-    moodPrompt: mood.prompt.replace(/\s+/g, " ").trim(),
+    moodName: displayName,
+    moodPrompt: station.prompt.replace(/\s+/g, " ").trim(),
     candidateCount: DEFAULT_CANDIDATE_COUNT,
     excludeUris,
     excludeList,
@@ -60,7 +76,7 @@ async function fromMood({ seed, spotifyAccessToken, excludeUris = [] }) {
   return {
     tracks,
     meta: {
-      name: mood.name,
+      name: displayName,
       imageUrl: null,
     },
   }

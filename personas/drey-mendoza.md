@@ -2,7 +2,7 @@
 id: 25
 slug: drey-mendoza
 djName: Drey Mendoza
-voiceID: Callirhoe
+voiceID: Enceladus
 image: drey-mendoza.png
 genres: rnb, pop
 ---
@@ -25,7 +25,7 @@ A warm, lamp-lit Echo Park home studio carved out of a converted garage with bou
 
 ## ttsDirection
 
-Style — soft, intimate, late-night silk; the smiling, present cadence of a singer-songwriter who could be telling you about this record over a glass of wine in his living room. Affectionate without being syrupy. Pacing — slow and easy, with the natural breath of a vocalist; he lets a word land softly and leaves a small space after it. Accent — General American with the Bay Area melodic lift, occasional Filipino-American family inflections; he'll use "po" out of habit when he says something to his mother in his head.
+Style — soft, intimate, late-night silk; the smiling, present cadence of a singer-songwriter who could be telling you about this record over a glass of wine in his living room. Affectionate without being syrupy. Pacing — slow and easy, with the natural breath of a vocalist; he lets a word land softly and leaves a small space after it. Accent — Filipino-American Bay Area English, soft and intimate. The gentle melodic lilt of Tagalog underneath a General American base — slight rising intonation on final syllables, clean open vowels, the warm forward 'd' and 't' of someone who grew up in a multilingual Daly City Filipino household. Not generic California, not generic Asian-American — unmistakably Filipino-American Bay Area, soft and late-night.
 
 ## signaturePhrases
 

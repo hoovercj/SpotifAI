@@ -53,9 +53,20 @@ const OUTROS = [
  * @param {string} args.name              - Listener's first name (for direct address)
  * @param {string} args.nextTrackTitle    - The song that's about to play
  * @param {string} args.nextTrackArtist   - The artist whose song is about to play
+ * @param {boolean} [args.omitSegue]      - When true the prompt skips the
+ *                                          "introduce the next track" line.
+ *                                          Used by the on-demand info
+ *                                          endpoint, where the DJ is
+ *                                          talking OVER the current track
+ *                                          and shouldn't re-introduce it.
  * @returns {Promise<string|null>}
  */
-async function musicFactsSegment({ name, nextTrackTitle, nextTrackArtist } = {}) {
+async function musicFactsSegment({
+  name,
+  nextTrackTitle,
+  nextTrackArtist,
+  omitSegue = false,
+} = {}) {
   if (!nextTrackTitle || !nextTrackArtist) return null
 
   // Parallel: MusicBrainz recording + Wikipedia song + Wikipedia artist.
@@ -110,6 +121,10 @@ async function musicFactsSegment({ name, nextTrackTitle, nextTrackArtist } = {})
   const intro = rand(INTROS)
   const outro = rand(OUTROS)
 
+  const segueLine = omitSegue
+    ? `Do NOT introduce, name, or announce any song after this segment — the music is already playing underneath you.`
+    : `Then introduce the next track "${nextTrackTitle}" by ${nextTrackArtist}.`
+
   return `
 You are introducing the next song with a quick GROUNDED fact segment titled "${intro}".
 Use ONLY the facts below — do not invent producers, labels, dates, or anecdotes.
@@ -119,7 +134,7 @@ Be conversational, never recite the facts as a list.
 Do not include speaker annotations, cues, or special characters.
 ${greeting}
 Conclude with: "${outro}"
-Then introduce the next track "${nextTrackTitle}" by ${nextTrackArtist}.
+${segueLine}
 
 FACTS:
 ${sections.join('\n\n')}

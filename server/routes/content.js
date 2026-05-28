@@ -7,6 +7,11 @@ const { showRunner } = require('../services/rundown/showRunner')
 const { reset } = require('../services/rundown/rundownUtlities/dbUtilities')
 const { createChatSession } = require('../services/llm')
 const { buildDJSystemPrompt } = require('../services/llm/buildDJSystemPrompt')
+const { createContent } = require('../services/createContent')
+const { convertFileToDataURI } = require('../services/utl/convertMP3FileToDataURI')
+const currentWeather = require('../services/currentWeather')
+const { newsSegment } = require('../services/news')
+const { musicFactsSegment } = require('../services/musicFacts')
 
 // Per-(jamSession, dj) chat sessions. Keyed so each DJ keeps an independent
 // conversation history within a single listening session, and multiple
@@ -254,6 +259,124 @@ router.delete('/dj-preference/:seedKey', async (req, res) => {
   } catch (err) {
     console.error('DELETE /dj-preference failed:', err)
     return res.status(500).json({ error: 'dj_preference_delete_failed' })
+  }
+})
+
+// ---------------------------------------------------------------------
+// On-demand DJ info segments (DJ Action Bar)
+//
+//   POST /info-request
+//     body: {
+//       kind:          'news' | 'weather' | 'music-info',
+//       jamSessionId:  string,
+//       djId:          number,
+//       currentTrack:  { name, artist }    // what's playing right now
+//     }
+//     -> 200 { audioURI, transcript, kind }
+//        204                                  (no body) when kind=news|music-info
+//                                            has no fresh material to deliver
+//        4xx { error }                        on validation / missing data
+//
+// This is distinct from the rundown's scheduled DJ chatter — the
+// segment is NOT added to JamSessionTracks, so it leaves the show
+// running untouched. The DJ talks over the current track via the
+// HTMLAudio overlay, ducking Spotify just like a scheduled break.
+// ---------------------------------------------------------------------
+const VALID_INFO_KINDS = new Set(['news', 'weather', 'music-info'])
+
+router.post('/info-request', async (req, res) => {
+  try {
+    const email = requireEmail(req, res)
+    if (!email) return
+
+    const { kind, jamSessionId, djId: rawDjId, currentTrack } = req.body || {}
+    if (!VALID_INFO_KINDS.has(kind)) {
+      return res.status(400).json({ error: 'invalid_kind' })
+    }
+    if (!jamSessionId) {
+      return res.status(400).json({ error: 'jam_session_id_required' })
+    }
+    const djId = parseDjId(rawDjId)
+    if (djId === undefined) {
+      return res.status(400).json({ error: 'invalid_dj_id' })
+    }
+    if (!currentTrack?.name || !currentTrack?.artist) {
+      return res.status(400).json({ error: 'current_track_required' })
+    }
+
+    const user = await User.findOne({
+      where: { email },
+      include: {
+        model: Profile,
+        attributes: ['name', 'zip', 'lat', 'long'],
+      },
+    })
+    if (!user) {
+      return res.status(404).json({ error: 'user_not_found' })
+    }
+
+    const name = user.profile?.name || user.display_name || 'there'
+    const chat = await getOrCreateChat(jamSessionId, djId)
+
+    let prompt = null
+    if (kind === 'weather') {
+      const { lat, long } = user.profile || {}
+      if (lat == null || long == null) {
+        return res
+          .status(412)
+          .json({ error: 'profile_location_required' })
+      }
+      const weatherReport = await currentWeather(lat, long)
+      prompt = `${name} just asked for a quick weather update. Deliver it in two or three short sentences using the data below. Do NOT introduce, name, or announce any song — the music is already playing underneath you. End with a brief sign-off.\n\nWeather: ${weatherReport}`
+    } else if (kind === 'news') {
+      prompt = await newsSegment({
+        name,
+        // The on-demand path passes the CURRENT track only so the
+        // music-fact lookup (musicFactsSegment) can find the right
+        // recording; newsSegment ignores it once omitSegue is set.
+        nextTrackTitle: currentTrack.name,
+        nextTrackArtist: currentTrack.artist,
+        omitSegue: true,
+      })
+      if (!prompt) return res.status(204).end()
+    } else if (kind === 'music-info') {
+      prompt = await musicFactsSegment({
+        name,
+        nextTrackTitle: currentTrack.name,
+        nextTrackArtist: currentTrack.artist,
+        omitSegue: true,
+      })
+      if (!prompt) return res.status(204).end()
+    }
+
+    const content = await createContent(
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      user,
+      djId,
+      null,
+      chat,
+      prompt
+    )
+    if (!content?.filePath) {
+      return res.status(500).json({ error: 'content_generation_failed' })
+    }
+
+    const audioURI = await convertFileToDataURI(
+      content.filePath,
+      content.format
+    )
+    return res.json({ audioURI, transcript: content.text, kind })
+  } catch (err) {
+    console.error('POST /api/content/info-request failed:', err)
+    return res.status(500).json({
+      error: 'info_request_failed',
+      message: err?.message || 'Internal Server Error',
+    })
   }
 })
 

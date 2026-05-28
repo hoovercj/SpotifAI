@@ -44,8 +44,8 @@ Each DJ has a unique voice and a hand-tuned style. Catalog stations pin a DJ exp
 | 21 | Wren Holloway            | `Laomedeia`      | punk, indie, rock                        |
 | 22 | Henri Dubois             | `Zubenelgenubi`  | jazz, folk, blues                        |
 | 23 | Sterling Holt            | `Sadachbia`      | holiday, stagescreen, jazz               |
-| 24 | Aria Petros              | `Enceladus`      | classical, stagescreen                   |
-| 25 | Drey Mendoza             | `Callirhoe`      | rnb, pop                                 |
+| 24 | Aria Petros              | `Callirrhoe`     | classical, stagescreen                   |
+| 25 | Drey Mendoza             | `Enceladus`      | rnb, pop                                 |
 | 26 | Stella Vance             | `Zephyr`         | rock, pop, indie                         |
 | 27 | Tia "TJ" Jackson         | `Kore`           | hiphop, rnb                              |
 | 28 | Maya Goldberg            | `Umbriel`        | indie, pop                               |

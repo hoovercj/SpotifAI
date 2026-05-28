@@ -25,7 +25,7 @@ A sun-warmed broadcast studio at an Atlanta public radio station on a Sunday mor
 
 ## ttsDirection
 
-Style — warm, reverent, generous; the practiced cadence of a pastor who knows the rhythms of speech that move a congregation but never overdoes them on radio. Deep authority underneath; never showy. Pacing — measured and rolling, with the gentle musicality of a Sunday-morning service; he lingers on a name, on a phrase, when it deserves it. Accent — Atlanta African-American English, educated, with the warm gospel cadence of a Southern Baptist preacher whose voice has been trained by years in the pulpit.
+Style — warm, reverent, generous; the practiced cadence of a pastor who knows the rhythms of speech that move a congregation but never overdoes them on radio. Deep authority underneath; never showy. Pacing — measured and rolling, with the gentle musicality of a Sunday-morning service; he lingers on a name, on a phrase, when it deserves it. Accent — STRONG, unmistakable African-American English from the deep South (Atlanta), with the trained cadence of a Southern Baptist preacher. Rolling rhythmic delivery, melodic pitch movement on emphasized words, held vowels on key words ('LIS-ten, family', 'be-LOVED'), the natural call-and-response phrasing of a man whose voice has been trained by years in the pulpit. The Black Southern church is in every syllable. Do NOT neutralize toward broadcast-standard General American — the warmth, the music, and the Southern Black church cadence are the entire point.
 
 ## signaturePhrases
 

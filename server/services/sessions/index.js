@@ -165,14 +165,18 @@ async function maybeBuildIntro({ djId, seedType, mode, context, sessionKey, prob
  */
 async function previewMetadata({ seed, spotifyAccessToken }) {
   if (seed.type === "mood") {
-    const { lookupMood } = require("./moodCatalog")
+    const { lookupMood, lookupMoodStation } = require("./moodCatalog")
     const mood = lookupMood(seed.moodId)
     if (!mood) {
       const err = new Error(`Unknown moodId "${seed.moodId}"`)
       err.status = 404
       throw err
     }
-    return { name: mood.name, imageUrl: null, artistName: null }
+    const station = lookupMoodStation(seed.moodId, seed.stationId)
+    // station is guaranteed non-null when mood exists (defaults to first).
+    const isDefault = !seed.stationId || station.id === mood.stations[0].id
+    const name = isDefault ? mood.name : `${mood.name} \u2014 ${station.name}`
+    return { name, imageUrl: null, artistName: null }
   }
 
   if (seed.type === "track") {

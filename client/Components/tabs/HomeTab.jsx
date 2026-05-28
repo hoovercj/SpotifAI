@@ -47,12 +47,12 @@ function uniqByUri(items) {
  *   1. Recent sessions row — cross-device "jump back in" tiles from
  *      the server-backed `recent_session` table. Only renders if the
  *      user has at least one prior session.
- *   2. Discover — recent Spotify plays, top artists, top tracks. Each
- *      tap starts a brand-new SpotifAI session seeded from the item.
- *   3. Radio — gradient tiles. Stations (genres) route to the genre
- *      detail page so the user can pick a specific AI station. Mood
- *      tiles start a mood session directly (there's no per-mood detail
- *      page — the mood itself is the seed).
+ *   2. Radio — gradient tiles. Stations (genres) and moods both route
+ *      to the genre/mood detail page so the user can pick a specific
+ *      AI station from the list.
+ *   3. Discover — your recent Spotify plays, top artists, top tracks.
+ *      Each tap starts a brand-new SpotifAI session seeded from the
+ *      item.
  *   4. Playlists — the user's Spotify playlists, each starts a
  *      playlist-seeded session.
  *
@@ -109,18 +109,6 @@ export default function HomeTab() {
         tuningOverride: {
           name: `${artist.name} Radio`,
           image: pickImage(artist),
-        },
-      }
-    )
-  }
-
-  const startMoodSession = (mood) => {
-    start(
-      { type: "mood", moodId: mood.id },
-      {
-        tuningOverride: {
-          name: mood.name,
-          gradient: [mood.from, mood.to],
         },
       }
     )
@@ -187,9 +175,30 @@ export default function HomeTab() {
         </ScrollableRow>
       )}
 
+      {/* ===== Radio (gradient browse tiles) ===== */}
+      <ScrollableRow title="Stations" subtitle="Browse by genre">
+        {GENRES.map((g) => (
+          // No onClick override — genre tiles route to /search where
+          // the user can pick a specific AI station from the list.
+          <GenreStationTile key={g.id} genre={g} />
+        ))}
+      </ScrollableRow>
+
+      <ScrollableRow title="Moods & activities" subtitle="Browse by vibe">
+        {MOODS.map((m) => (
+          // No onClick override — mood tiles route to /search where the
+          // user picks a specific AI station from the list, just like
+          // genre tiles.
+          <GenreStationTile key={m.id} genre={m} />
+        ))}
+      </ScrollableRow>
+
       {/* ===== Discover (your own Spotify history) ===== */}
       {recentTracks.length > 0 && (
-        <ScrollableRow title="Jump back in" subtitle="From your Spotify history">
+        <ScrollableRow
+          title="Your recent tracks"
+          subtitle="From your Spotify history"
+        >
           {recentTracks.map((track) => (
             <PosterTile
               key={track.uri}
@@ -244,27 +253,6 @@ export default function HomeTab() {
           ))}
         </ScrollableRow>
       )}
-
-      {/* ===== Radio (gradient browse tiles) ===== */}
-      <ScrollableRow title="Stations" subtitle="Browse by genre">
-        {GENRES.map((g) => (
-          // No onClick override — genre tiles route to /search where
-          // the user can pick a specific AI station from the list.
-          <GenreStationTile key={g.id} genre={g} />
-        ))}
-      </ScrollableRow>
-
-      <ScrollableRow title="Moods & activities" subtitle="Browse by vibe">
-        {MOODS.map((m) => (
-          // Mood tiles start a session directly — there's no per-mood
-          // detail screen to drill into, the mood *is* the seed.
-          <GenreStationTile
-            key={m.id}
-            genre={m}
-            onClick={() => startMoodSession(m)}
-          />
-        ))}
-      </ScrollableRow>
 
       {/* ===== Your playlists ===== */}
       {playlists.length > 0 && (

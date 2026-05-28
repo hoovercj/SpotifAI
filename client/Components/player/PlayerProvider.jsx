@@ -22,6 +22,7 @@ import {
   clearCurrentSession,
   recordSessionQueueAdditions,
   appendSessionTracksIfMatch,
+  clearPendingRehydrateDjId,
 } from "../../store/playerSlice"
 import { setCurrentDj as setStoreCurrentDj } from "../../store/djsSlice"
 import { showProfile } from "../../store/userSlice"
@@ -72,6 +73,12 @@ export function PlayerProvider({ children }) {
   const profile = useSelector((s) => s.user?.profile)
   const currentDj = useSelector((s) => s.djs?.currentDj)
   const allDjs = useSelector((s) => s.djs?.allDjs)
+  // Post-refresh rehydration: persistPlayer stashes the active DJ's id
+  // here on boot so we can promote it back to djs.currentDj once the
+  // /api/content/dj-characters roster lands.
+  const pendingRehydrateDjId = useSelector(
+    (s) => s.player?.pendingRehydrateDjId ?? null
+  )
   // The session the DJ is currently providing chatter for. Was
   // historically `s.stations.currentStation` (a field that never
   // actually existed — the selector silently returned undefined and
@@ -82,6 +89,7 @@ export function PlayerProvider({ children }) {
   const jamSession = useSelector((s) => s.jamSession)
   const useBackendApis = useSelector((s) => s.user?.useBackendApis)
   const volume = useSelector((s) => s.player?.volume ?? DEFAULT_INITIAL_VOLUME)
+  const djVolume = useSelector((s) => s.player?.djVolume ?? 1.0)
   const isMuted = useSelector((s) => s.player?.isMuted ?? false)
   const playerCurrentTrack = useSelector((s) => s.player?.currentTrack)
   const playerCurrentSession = useSelector((s) => s.player?.currentSession)
@@ -114,6 +122,7 @@ export function PlayerProvider({ children }) {
   const jamSessionRef = useRef(jamSession)
   const useBackendApisRef = useRef(useBackendApis)
   const volumeRef = useRef(volume)
+  const djVolumeRef = useRef(djVolume)
   const isMutedRef = useRef(isMuted)
 
   useEffect(() => { currentDjRef.current = currentDj }, [currentDj])
@@ -121,18 +130,54 @@ export function PlayerProvider({ children }) {
   useEffect(() => { currentSessionRef.current = currentSession }, [currentSession])
   useEffect(() => { jamSessionRef.current = jamSession }, [jamSession])
   useEffect(() => { useBackendApisRef.current = useBackendApis }, [useBackendApis])
+
+  // After a page refresh the player slice was hydrated from
+  // localStorage (currentSession + currentContext), but djs.currentDj
+  // can't be restored synchronously because the DJ roster carries
+  // ~MB of base64 portrait data we deliberately don't persist. The
+  // moment fetchDjs lands the roster we look up the parked id and
+  // promote it back into djs.currentDj, then clear the pending flag.
+  useEffect(() => {
+    if (pendingRehydrateDjId == null) return
+    if (currentDj) {
+      // Something else already populated currentDj first — drop the
+      // pending id so this effect doesn't fight a later swap.
+      dispatch(clearPendingRehydrateDjId())
+      return
+    }
+    if (!Array.isArray(allDjs) || allDjs.length === 0) return
+    const match = allDjs.find(
+      (d) => Number(d?.id) === Number(pendingRehydrateDjId)
+    )
+    if (match) {
+      dispatch(setStoreCurrentDj(match))
+    }
+    // Whether or not we found a match, drop the flag — if the id is
+    // stale (DJ removed from roster) we don't want to keep re-trying.
+    dispatch(clearPendingRehydrateDjId())
+  }, [pendingRehydrateDjId, allDjs, currentDj, dispatch])
   useEffect(() => {
     volumeRef.current = volume
     // Apply live volume changes to the underlying SDK + DJ overlay.
     if (isMutedRef.current) return
     if (audioRef.current && !audioRef.current.paused) {
-      audioRef.current.volume = volume
+      audioRef.current.volume = volume * djVolumeRef.current
       playerRef.current?.player?.setVolume(volume * SPOTIFY_VOL_ATTENUATION)
     } else {
-      if (audioRef.current) audioRef.current.volume = volume
+      if (audioRef.current) audioRef.current.volume = volume * djVolumeRef.current
       playerRef.current?.player?.setVolume(volume)
     }
   }, [volume])
+  // Independent DJ-overlay volume. Applied on top of the master volume
+  // so a user who wants the DJ quieter than the music can dial it down
+  // without touching the music level. Master mute still wins.
+  useEffect(() => {
+    djVolumeRef.current = djVolume
+    if (isMutedRef.current) return
+    if (audioRef.current) {
+      audioRef.current.volume = volumeRef.current * djVolume
+    }
+  }, [djVolume])
   useEffect(() => {
     isMutedRef.current = isMuted
     if (isMuted) {
@@ -140,7 +185,7 @@ export function PlayerProvider({ children }) {
       playerRef.current?.player?.setVolume(0)
     } else {
       const v = volumeRef.current
-      if (audioRef.current) audioRef.current.volume = v
+      if (audioRef.current) audioRef.current.volume = v * djVolumeRef.current
       playerRef.current?.player?.setVolume(
         audioRef.current && !audioRef.current.paused
           ? v * SPOTIFY_VOL_ATTENUATION
@@ -350,7 +395,7 @@ export function PlayerProvider({ children }) {
   // ── Mount the DJ audio element ─────────────────────────────────────────
   useEffect(() => {
     const audio = new Audio()
-    audio.volume = volumeRef.current
+    audio.volume = volumeRef.current * djVolumeRef.current
     audioRef.current = audio
 
     const onPlay = () => {
@@ -763,6 +808,42 @@ export function PlayerProvider({ children }) {
     [dispatch]
   )
 
+  // ── On-demand DJ audio (DJ Action Bar info-segment playback) ───────────
+  // Interrupts any pending or actively playing DJ overlay segment and
+  // plays the supplied data URI through the same audio element so the
+  // existing duck/restore + djSpeaking wiring carries over for free.
+  //
+  // Critically, we flip `needNextDjAudioRef = true` so that when this
+  // on-demand segment ends, the regular onEnded handler's
+  // prepareNextDjAudio() call FETCHES a fresh scheduled segment for
+  // the upcoming break instead of replaying the (now-stale) audio
+  // currently loaded in the element. Without that flip the same news/
+  // weather clip plays again at the end of the track, referencing the
+  // wrong "next song".
+  const playDjAudio = useCallback(async (audioURI) => {
+    const audio = audioRef.current
+    if (!audio || !audioURI) return
+    window.clearTimeout(djAudioTimeoutRef.current)
+    window.clearTimeout(delayNextTrackTimeoutRef.current)
+    delayNextTrackRef.current = false
+    trackDelaySetRef.current = false
+    djAudioPendingRef.current = false
+    // Force a fresh fetch for the next scheduled break.
+    needNextDjAudioRef.current = true
+    try {
+      audio.pause()
+      audio.currentTime = 0
+    } catch (_err) {
+      // pause/currentTime can throw on detached elements; ignore.
+    }
+    audio.src = audioURI
+    try {
+      await audio.play()
+    } catch (err) {
+      console.warn("playDjAudio failed:", err)
+    }
+  }, [])
+
   // Re-apply device transfer when deviceId changes (preserves Radio.jsx logic).
   const deviceId = useSelector((s) => s.player?.deviceId)
   useEffect(() => {
@@ -786,6 +867,7 @@ export function PlayerProvider({ children }) {
       previous,
       seek,
       selectDj,
+      playDjAudio,
     }),
     [
       playTracks,
@@ -800,6 +882,7 @@ export function PlayerProvider({ children }) {
       previous,
       seek,
       selectDj,
+      playDjAudio,
     ]
   )
 

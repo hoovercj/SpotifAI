@@ -16,6 +16,7 @@
 
 const { startStation } = require("../../aiStations")
 const { lookupStation } = require("../../aiStations/catalog")
+const { resolveStationCover } = require("../../aiStations/resolveStationCover")
 const { djCharacters } = require("../../djCharacters")
 const { seedKey } = require("../seedKey")
 
@@ -31,6 +32,14 @@ async function fromStation({ seed, spotifyAccessToken }) {
   const entry = lookupStation(seed.genreId, seed.stationId)
   const djId = entry.station.djId
   const persona = await djCharacters(djId)
+  // Resolve the station cover so the recent-sessions "Jump back in"
+  // tile shows the same artwork as the station browse card. Falls
+  // through to the DJ portrait, then null (client gradient swatch).
+  const image = resolveStationCover({
+    genreId: seed.genreId,
+    stationId: seed.stationId,
+    djId,
+  })
 
   return {
     ready: result.ready,
@@ -45,6 +54,7 @@ async function fromStation({ seed, spotifyAccessToken }) {
       name: entry.station.name,
       djId,
       djName: persona?.djName || null,
+      image,
     },
   }
 }

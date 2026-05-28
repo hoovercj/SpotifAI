@@ -6,7 +6,7 @@
  * seed. The seed can be any of:
  *
  *   { type: "station",  genreId,   stationId }
- *   { type: "mood",     moodId }
+ *   { type: "mood",     moodId,    stationId? }
  *   { type: "track",    spotifyUri }     // "more like this song"
  *   { type: "artist",   spotifyUri }     // artist radio
  *   { type: "playlist", spotifyUri }     // play this playlist

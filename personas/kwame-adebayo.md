@@ -25,7 +25,7 @@ A modern Lagos production studio at the top of a small commercial building in Su
 
 ## ttsDirection
 
-Style — confident, smooth, knowing; the relaxed authority of a producer who has spent twenty years in front of speakers and trusts his own ears completely. Warm without being soft. Pacing — measured and unhurried, with the soft musicality of a Yoruba speaker; he leaves space for a name to land. Accent — Nigerian English, educated Lagos cadence, with the gentle melodic rise on the second syllable of multi-syllable words; he'll let Pidgin and Yoruba phrases live in his sentences ("how far", "wahala", "no shaking", "abi?").
+Style — confident, smooth, knowing; the relaxed authority of a producer who has spent twenty years in front of speakers and trusts his own ears completely. Warm without being soft. Pacing — measured and unhurried, with the soft musicality of a Yoruba speaker; he leaves space for a name to land. Accent — STRONG, unmistakable Nigerian English (Lagos, Yoruba-inflected). Full Yoruba intonation: the percussive 'd' in place of 'th' ('dis', 'dat'), clean open vowels with no schwa reduction, melodic rise on the second syllable of multi-syllable words, the characteristic falling cadence on declarative sentences. Pidgin and Yoruba phrases ('how far', 'wahala', 'no shaking', 'abi?', 'wo!') get FULL Lagos pronunciation, never Anglicized. Do NOT default to General American or BBC English — this IS Lagos English, foreground and proud.
 
 ## signaturePhrases
 

@@ -10,6 +10,10 @@
  *   remove({ userEmail, seedKey })            — explicit dismissal
  */
 const { RecentSession } = require("../../db")
+const {
+  resolveStationCover,
+} = require("../aiStations/resolveStationCover")
+const { lookupStation } = require("../aiStations/catalog")
 
 const DEFAULT_LIMIT = 20
 const MAX_PER_USER = 50 // cap to keep the table well-bounded
@@ -84,12 +88,33 @@ async function list({ userEmail, limit = DEFAULT_LIMIT }) {
       seed: row.seed,
       name: row.name,
       djId: row.djId,
-      imageUrl: row.imageUrl,
+      // For station seeds, re-resolve the cover at read time so rows
+      // that were recorded before a station's cover art was added (or
+      // before this codepath was added at all) self-heal on the next
+      // home-screen load. Falls back to whatever we stored on write.
+      imageUrl: freshStationCover(row.seed) ?? row.imageUrl,
       lastUsedAt: row.lastUsedAt,
     }))
   } catch (err) {
     console.warn("recentSessions.list failed:", err?.message || err)
     return []
+  }
+}
+
+// Best-effort: re-derive the current cover URL for a station seed.
+// Returns null for non-station seeds or when anything goes wrong.
+function freshStationCover(seed) {
+  if (!seed || seed.type !== "station") return null
+  try {
+    const entry = lookupStation(seed.genreId, seed.stationId)
+    if (!entry?.station) return null
+    return resolveStationCover({
+      genreId: seed.genreId,
+      stationId: seed.stationId,
+      djId: entry.station.djId,
+    })
+  } catch {
+    return null
   }
 }
 

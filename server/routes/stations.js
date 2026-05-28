@@ -1,5 +1,9 @@
 const router = require("express").Router()
-const { startStation, getJobStatus } = require("../services/aiStations")
+const {
+  startStation,
+  getJobStatus,
+  resolveAllStationCovers,
+} = require("../services/aiStations")
 const { ensureFreshAccessToken } = require("./utl/ensureFreshAccessToken")
 
 /**
@@ -56,6 +60,31 @@ router.get("/jobs/:jobId", (req, res) => {
     return res.status(404).json(status)
   }
   return res.json(status)
+})
+
+/**
+ * GET /api/stations/covers
+ *
+ * Returns a `{ "<genreId>/<stationId>": "/images/...png" | null }` map
+ * for every station in the server catalog, resolved via the three-tier
+ * preference order (pre-baked Gemini cover → DJ portrait → null).
+ *
+ * Used by the client's station/genre cards to render cover art instead
+ * of flat gradient swatches. The response shape is intentionally tiny
+ * (~200 short string entries) so it's safe to fetch unconditionally on
+ * app mount — no pagination, no per-card request-fan-out.
+ *
+ * No auth required: the URLs are paths to static assets in `public/`,
+ * which Express already serves to anyone. Wiring an auth gate here
+ * would only obscure them, not protect them.
+ */
+router.get("/covers", (_req, res) => {
+  try {
+    return res.json({ covers: resolveAllStationCovers() })
+  } catch (err) {
+    console.error("Failed to resolve station covers:", err)
+    return res.status(500).json({ error: "station_covers_failed" })
+  }
 })
 
 module.exports = router

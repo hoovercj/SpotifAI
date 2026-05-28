@@ -43,12 +43,16 @@ async function pickFreshArticle(provider) {
   return null;
 }
 
-function buildPrompt({ name, article, nextTrackTitle, nextTrackArtist }) {
+function buildPrompt({ name, article, nextTrackTitle, nextTrackArtist, omitSegue }) {
   const localeLabel = {
     dk: 'Denmark',
     es: 'Spain',
     iowa: 'Iowa',
   }[article.locale] || article.locale;
+
+  const segueLine = omitSegue
+    ? `- Do NOT introduce, name, or announce a song after the brief — the music is already playing underneath you. End with a brief sign-off.`
+    : `- After the brief, segue smoothly into the next track: "${nextTrackTitle}" by ${nextTrackArtist}.`;
 
   return `
 You are about to deliver a short on-air news brief from ${localeLabel} (${article.source}) for ${name}.
@@ -61,12 +65,12 @@ Rules:
 - Translate any non-English words naturally; pronounce place names in their source language.
 - Do not invent details that are not in the headline or context.
 - Do not include a URL, source attribution beyond "${article.source}", or filler like "stay tuned for more news".
-- After the brief, segue smoothly into the next track: "${nextTrackTitle}" by ${nextTrackArtist}.
+${segueLine}
 - Output only the words you would speak on air. No stage directions, no quotation marks around the whole response.
 `.trim();
 }
 
-async function newsSegment({ name, nextTrackTitle, nextTrackArtist }) {
+async function newsSegment({ name, nextTrackTitle, nextTrackArtist, omitSegue = false }) {
   const locale = nextLocale();
   if (!locale) return null;
   const provider = PROVIDERS[locale];
@@ -94,7 +98,7 @@ async function newsSegment({ name, nextTrackTitle, nextTrackArtist }) {
     }
   }
 
-  return buildPrompt({ name, article, nextTrackTitle, nextTrackArtist });
+  return buildPrompt({ name, article, nextTrackTitle, nextTrackArtist, omitSegue });
 }
 
 module.exports = { newsSegment };
