@@ -19,7 +19,7 @@
     "build:prod": "cross-env NODE_ENV=production vite build",
     "package": "node scripts/package-deploy.js",
     "preview": "vite preview",
-    "start": "cross-env NODE_ENV=production node server/index.js",
+    "start": "node server/index.js",
     "prompt": "node scripts/prompt-lab.js",
     "smoke": "node scripts/smoke.js",
     "seed:dj-avatars": "node scripts/seed-dj-avatars.js",

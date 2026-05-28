@@ -61,6 +61,10 @@ var baseSettings = [
   { name: 'SCM_DO_BUILD_DURING_DEPLOYMENT', value: 'false' }
   { name: 'ENABLE_ORYX_BUILD', value: 'false' }
   { name: 'WEBSITE_NODE_DEFAULT_VERSION', value: '~22' }
+  // NODE_ENV is consumed by Express (e.g. session cookie `secure` flag) and
+  // sequelize. We set it here instead of via `cross-env` in the start script
+  // because `cross-env` is a devDep and isn't installed in the prod artifact.
+  { name: 'NODE_ENV', value: 'production' }
   { name: 'DATABASE_URL', value: databaseUrl }
   { name: 'GOOGLE_API_KEY', value: googleApiKey }
   { name: 'SPOTIFY_CLIENT_ID', value: spotifyClientId }
