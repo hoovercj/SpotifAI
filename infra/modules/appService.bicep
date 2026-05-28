@@ -59,6 +59,10 @@ var baseSettings = [
   // Let Oryx run `npm install` + `npm run build` + `npm prune --production`
   // on the App Service host after the zip is extracted.
   { name: 'SCM_DO_BUILD_DURING_DEPLOYMENT', value: 'true' }
+  // Force `npm install` to include devDependencies so Oryx can run `vite build`
+  // (vite + plugins live in devDeps). Oryx then runs `npm prune --production`
+  // afterwards to strip them before the container starts.
+  { name: 'NPM_CONFIG_PRODUCTION', value: 'false' }
   { name: 'WEBSITE_NODE_DEFAULT_VERSION', value: '~22' }
   // NODE_ENV controls Express session cookie `secure` flag, etc.
   { name: 'NODE_ENV', value: 'production' }
