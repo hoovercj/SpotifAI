@@ -56,14 +56,11 @@ var optionalSettings = filter([
 ], s => !empty(s.value))
 
 var baseSettings = [
-  // The deploy zip is a pre-built artifact (built on the GitHub runner).
-  // Skip Oryx entirely so App Service just extracts and runs `npm start`.
-  { name: 'SCM_DO_BUILD_DURING_DEPLOYMENT', value: 'false' }
-  { name: 'ENABLE_ORYX_BUILD', value: 'false' }
+  // Let Oryx run `npm install` + `npm run build` + `npm prune --production`
+  // on the App Service host after the zip is extracted.
+  { name: 'SCM_DO_BUILD_DURING_DEPLOYMENT', value: 'true' }
   { name: 'WEBSITE_NODE_DEFAULT_VERSION', value: '~22' }
-  // NODE_ENV is consumed by Express (e.g. session cookie `secure` flag) and
-  // sequelize. We set it here instead of via `cross-env` in the start script
-  // because `cross-env` is a devDep and isn't installed in the prod artifact.
+  // NODE_ENV controls Express session cookie `secure` flag, etc.
   { name: 'NODE_ENV', value: 'production' }
   { name: 'DATABASE_URL', value: databaseUrl }
   { name: 'GOOGLE_API_KEY', value: googleApiKey }
@@ -92,7 +89,7 @@ resource site 'Microsoft.Web/sites@2023-12-01' = {
       ftpsState: 'Disabled'
       minTlsVersion: '1.2'
       http20Enabled: true
-      // Use the package.json `start` script (cross-env NODE_ENV=production node server/index.js).
+      // Use the package.json `start` script (node server/index.js).
       appCommandLine: 'npm start'
       appSettings: allSettings
     }

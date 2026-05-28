@@ -17,7 +17,6 @@
     "dev:api": "cross-env NODE_ENV=development PORT=3001 nodemon --delay 500ms server/index.js --ignore dist/ --ignore client/ --ignore debug/ --ignore public/audio/ --ignore .tmp/",
     "build": "cross-env NODE_ENV=production vite build",
     "build:prod": "cross-env NODE_ENV=production vite build",
-    "package": "node scripts/package-deploy.js",
     "preview": "vite preview",
     "start": "node server/index.js",
     "prompt": "node scripts/prompt-lab.js",

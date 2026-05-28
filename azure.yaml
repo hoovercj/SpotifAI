@@ -9,12 +9,6 @@ services:
     project: .
     language: js
     host: appservice
-    # Pre-built artifact assembled by the GitHub Actions workflow (or by
-    # `npm run package` locally). Avoids a slow Oryx build on B1 by doing
-    # the npm install + vite build on a beefy CI runner and shipping only
-    # what App Service needs to start: server/, dist/, public/, package*.json,
-    # and a prod-pruned node_modules/.
-    dist: .deploy
 
 hooks:
   postprovision:
