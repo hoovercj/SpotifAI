@@ -65,6 +65,13 @@ jobs:
 
       - name: Build artifact
         shell: bash
+        env:
+          # Vite bakes these into the client bundle at build time (see
+          # vite.config.mjs CLIENT_ENV_KEYS). They MUST be set here, not just
+          # on the App Service runtime — the running server env is invisible
+          # to the already-built bundle the browser downloads.
+          SPOTIFY_CLIENT_ID: ${{ secrets.SPOTIFY_CLIENT_ID }}
+          SPOTIFY_REDIRECT_URI: ${{ vars.SPOTIFY_REDIRECT_URI }}
         run: |
           set -euo pipefail
           npm ci
