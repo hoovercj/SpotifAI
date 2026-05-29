@@ -1,29 +1,46 @@
 /**
  * TTS provider entry point. Selects an implementation based on the
- * TTS_PROVIDER env var (default: "gemini") and returns a stable
- * `synthesize({ text, voiceId, fileBaseName }) -> { filePath, text, format }`
- * interface.
+ * TTS_PROVIDER env var (default: "gemini") and returns stable
+ * `synthesize` + `synthesizeBuffer` functions.
  *
  * Provider modules must export:
  *   async synthesize({ text, voiceId, fileBaseName }) -> {
  *     filePath: string,  // absolute path to the generated audio file
- *     text:     string,  // the spoken text (passthrough)
+ *     text:     string,
  *     format:   "wav" | "mp3",
  *   }
+ *   async synthesizeBuffer({ text, voiceId }) -> {
+ *     wavBuffer: Buffer, // in-memory WAV (header + PCM)
+ *     text:      string,
+ *     format:    "wav" | "mp3",
+ *   }
+ *
+ * `synthesizeBuffer` is the preferred entry point for callers that
+ * upload the result to blob storage themselves (the intro-audio
+ * cache); `synthesize` is kept for callers that still want a local
+ * disk file (per-track DJ chatter via createContent).
  */
 const gemini = require('./gemini');
 
 const PROVIDERS = { gemini };
 
-async function synthesize({ text, voiceId, fileBaseName }) {
+function provider() {
   const providerName = (process.env.TTS_PROVIDER || 'gemini').toLowerCase();
-  const provider = PROVIDERS[providerName];
-  if (!provider) {
+  const p = PROVIDERS[providerName];
+  if (!p) {
     throw new Error(
       `Unknown TTS_PROVIDER "${providerName}". Available: ${Object.keys(PROVIDERS).join(', ')}`
     );
   }
-  return provider.synthesize({ text, voiceId, fileBaseName });
+  return p;
 }
 
-module.exports = { synthesize };
+async function synthesize({ text, voiceId, fileBaseName }) {
+  return provider().synthesize({ text, voiceId, fileBaseName });
+}
+
+async function synthesizeBuffer({ text, voiceId }) {
+  return provider().synthesizeBuffer({ text, voiceId });
+}
+
+module.exports = { synthesize, synthesizeBuffer };

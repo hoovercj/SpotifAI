@@ -18,14 +18,17 @@
  */
 const fs = require('node:fs')
 const path = require('node:path')
-const { convertFileToDataURI } = require('./convertMP3FileToDataURI')
 const { buildIntroText } = require('./buildIntroText')
 
 const PERSONAS_DIR = path.resolve(__dirname, '../../..', 'personas')
 // PNGs are baked by `scripts/seed-dj-avatars.js` into the public assets
-// folder so they're web-servable as static files AND inlineable as data
-// URIs from here. Single canonical location, one source of truth.
+// folder so they're web-servable as static files. We expose URL paths
+// (not data URIs) so the client can size + cache them like any other
+// image. Pre-generated thumb/full sizes live under `optimized/`; we
+// prefer those when they exist and fall back to the original PNG so
+// the server boots fine before `npm run optimize:images` has run.
 const IMAGE_DIR = path.resolve(__dirname, '../../..', 'public', 'images', 'djs')
+const OPTIMIZED_DIR = path.join(IMAGE_DIR, 'optimized')
 // Voice intro WAVs baked by `scripts/seed-dj-intros.js`. Served by
 // Express as static files under `/audio/`, so the URL exposed to the
 // client is just the basename prefixed with `/audio/`.
@@ -136,15 +139,39 @@ function loadPersonaMetadata() {
   return _cache
 }
 
-// Resolve a persona image to a data URI, gracefully tolerating a
-// missing file. Returns `null` when the image hasn't been baked yet
-// (during persona authoring, before `npm run seed:dj-avatars` runs)
-// so the server boots clean and the client can fall back to an
-// initials tile instead of a broken <img>.
-async function resolveImage(imageFile) {
+// Resolve a persona image to URL paths the client can drop into a
+// <picture> tag. Prefers the pre-generated `thumb`/`full` webp pair
+// from `scripts/optimize-images.js`, falls back to the original PNG
+// when those aren't built yet. Returns `null` when the source image
+// hasn't been baked, so the server boots clean and the client can
+// fall back to an initials tile instead of a broken <img>.
+function resolveImage(imageFile) {
   const fullPath = path.join(IMAGE_DIR, imageFile)
   if (!fs.existsSync(fullPath)) return null
-  return convertFileToDataURI(fullPath, 'png')
+  const base = imageFile.replace(/\.(png|jpe?g|webp)$/i, '')
+  const optThumbWebp = path.join(OPTIMIZED_DIR, `${base}.thumb.webp`)
+  const optFullWebp = path.join(OPTIMIZED_DIR, `${base}.full.webp`)
+  const optThumbJpg = path.join(OPTIMIZED_DIR, `${base}.thumb.jpg`)
+  const optFullJpg = path.join(OPTIMIZED_DIR, `${base}.full.jpg`)
+  const has = (p) => fs.existsSync(p)
+  return {
+    // Original-resolution PNG path (always present when the file
+    // exists). Kept as the universal fallback for older clients or
+    // when optimization hasn't run.
+    src: `/images/djs/${imageFile}`,
+    thumb: has(optThumbWebp)
+      ? {
+          webp: `/images/djs/optimized/${base}.thumb.webp`,
+          jpg: has(optThumbJpg) ? `/images/djs/optimized/${base}.thumb.jpg` : null,
+        }
+      : null,
+    full: has(optFullWebp)
+      ? {
+          webp: `/images/djs/optimized/${base}.full.webp`,
+          jpg: has(optFullJpg) ? `/images/djs/optimized/${base}.full.jpg` : null,
+        }
+      : null,
+  }
 }
 
 // Resolve a persona's pregenerated voice-intro clip to a public URL,
@@ -161,38 +188,37 @@ function resolveIntroUrl(slug) {
 
 // Returns the array of persona objects in the legacy
 // `{ id, djName, details: { voiceID, djStyle, signaturePhrases, context, image } }`
-// shape with `image` resolved to a data URI. The post-bump fields
-// (`slug`, `genres`, `appearance`, `scene`) are additive — existing
-// consumers that only read id/djName/details.{voiceID,djStyle,...} keep
-// working unchanged.
+// shape. `image` is now an object `{ src, thumb, full }` (or null) — the
+// client picks the size it needs and constructs the <picture> tag.
+// The post-bump fields (`slug`, `genres`, `appearance`, `scene`) are
+// additive — existing consumers that only read id/djName/details.{voiceID,djStyle,...}
+// keep working unchanged.
 async function loadPersonas() {
   const metas = loadPersonaMetadata()
-  return Promise.all(
-    metas.map(async (m) => ({
-      id: m.id,
-      slug: m.slug,
-      djName: m.djName,
-      details: {
-        voiceID: m.voiceID,
-        djStyle: m.djStyle,
-        signaturePhrases: m.signaturePhrases,
-        context: m.context,
-        ttsDirection: m.ttsDirection,
-        genres: m.genres,
-        appearance: m.appearance,
-        scene: m.scene,
-        image: await resolveImage(m.image),
-        introUrl: resolveIntroUrl(m.slug),
-        // The exact transcript that was sent to Gemini when the
-        // intro WAV was baked. Surfaced in the picker bio panel
-        // so users see what the Audition clip will say, and so
-        // the displayed text is guaranteed in sync with the
-        // audio (both use buildIntroText() over the same
-        // metadata). null when no intro has been baked yet.
-        introText: resolveIntroUrl(m.slug) ? buildIntroText(m) : null,
-      },
-    }))
-  )
+  return metas.map((m) => ({
+    id: m.id,
+    slug: m.slug,
+    djName: m.djName,
+    details: {
+      voiceID: m.voiceID,
+      djStyle: m.djStyle,
+      signaturePhrases: m.signaturePhrases,
+      context: m.context,
+      ttsDirection: m.ttsDirection,
+      genres: m.genres,
+      appearance: m.appearance,
+      scene: m.scene,
+      image: resolveImage(m.image),
+      introUrl: resolveIntroUrl(m.slug),
+      // The exact transcript that was sent to Gemini when the
+      // intro WAV was baked. Surfaced in the picker bio panel
+      // so users see what the Audition clip will say, and so
+      // the displayed text is guaranteed in sync with the
+      // audio (both use buildIntroText() over the same
+      // metadata). null when no intro has been baked yet.
+      introText: resolveIntroUrl(m.slug) ? buildIntroText(m) : null,
+    },
+  }))
 }
 
 // Eval-only overlay variant: load the production roster, then replace
@@ -213,32 +239,30 @@ async function loadPersonasWithExperiments(experimentsDir) {
 
   if (overrides.length === 0) return base
 
-  return Promise.all(
-    base.map(async (p) => {
-      const override = overrides.find((o) => o.id === p.id)
-      if (!override) return p
-      return {
-        id: override.id,
-        slug: override.slug,
-        djName: override.djName,
-        details: {
-          voiceID: override.voiceID,
-          djStyle: override.djStyle,
-          signaturePhrases: override.signaturePhrases,
-          context: override.context,
-          ttsDirection: override.ttsDirection,
-          genres: override.genres,
-          appearance: override.appearance,
-          scene: override.scene,
-          image: await resolveImage(override.image),
-          introUrl: resolveIntroUrl(override.slug),
-          introText: resolveIntroUrl(override.slug)
-            ? buildIntroText(override)
-            : null,
-        },
-      }
-    })
-  )
+  return base.map((p) => {
+    const override = overrides.find((o) => o.id === p.id)
+    if (!override) return p
+    return {
+      id: override.id,
+      slug: override.slug,
+      djName: override.djName,
+      details: {
+        voiceID: override.voiceID,
+        djStyle: override.djStyle,
+        signaturePhrases: override.signaturePhrases,
+        context: override.context,
+        ttsDirection: override.ttsDirection,
+        genres: override.genres,
+        appearance: override.appearance,
+        scene: override.scene,
+        image: resolveImage(override.image),
+        introUrl: resolveIntroUrl(override.slug),
+        introText: resolveIntroUrl(override.slug)
+          ? buildIntroText(override)
+          : null,
+      },
+    }
+  })
 }
 
 module.exports = {

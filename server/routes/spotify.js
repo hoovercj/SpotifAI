@@ -1,6 +1,9 @@
 const router = require('express').Router()
 const SpotifyWebApi = require('spotify-web-api-node')
 const { User, Profile } = require('../db')
+const logger = require('../services/logger')
+const { trackEvent, trackException } = require('../services/telemetry')
+const { hashUserId } = require('../services/utl/hashUserId')
 
 const spotifyRedirect = process.env.SPOTIFY_REDIRECT_URI
 
@@ -12,7 +15,9 @@ const REFRESH_BUFFER_MS = 60 * 1000
 // or restored. Mirrors what the original `/login` returned so the client store
 // shape stays identical.
 const buildUserPayload = (session, profile) => ({
-  email: session.email,
+  // Email is NOT shipped to the client — it's PII and nothing in the
+  // client actually reads it. The hash below is enough to identify
+  // the user to App Insights without exposing the address.
   displayName: session.displayName,
   accessToken: session.accessToken,
   // Note: refreshToken intentionally stays server-side only and is no longer
@@ -22,6 +27,11 @@ const buildUserPayload = (session, profile) => ({
     Math.floor(((session.expiresAt || 0) - Date.now()) / 1000)
   ),
   isAdmin: session.isAdmin,
+  // One-way hash of the email. The client passes this to App Insights as
+  // the authenticated-user id so cross-device telemetry can collapse
+  // onto a single user without leaking the email into the analytics
+  // pipeline. The email itself stays in our DB.
+  userIdHash: hashUserId(session.email),
   profile,
 })
 
@@ -45,7 +55,8 @@ async function refreshSessionToken(req) {
     if (body.refresh_token) req.session.refreshToken = body.refresh_token
     return true
   } catch (err) {
-    console.error('Spotify refreshAccessToken failed:', err)
+    logger.error({ err: err?.message, stack: err?.stack }, 'spotify.refreshAccessToken_failed')
+    trackException(err, { route: 'spotify.refresh' })
     return false
   }
 }
@@ -63,7 +74,6 @@ router.post('/refresh', async (req, res) => {
 })
 
 router.post('/login', async (req, res) => {
-  console.log(process.env.NODE_ENV, spotifyRedirect)
   const code = req.body.code
   const spotifyApi = new SpotifyWebApi({
     redirectUri: spotifyRedirect,
@@ -76,7 +86,8 @@ router.post('/login', async (req, res) => {
   try {
     ;({ body: tokenBody } = await spotifyApi.authorizationCodeGrant(code))
   } catch (err) {
-    console.error('Spotify authorizationCodeGrant failed:', err)
+    logger.error({ err: err?.message, statusCode: err?.statusCode }, 'spotify.authCodeGrant_failed')
+    trackException(err, { route: 'spotify.login.authCodeGrant' })
     return res
       .status(400)
       .json({ error: 'spotify_auth_failed', message: 'Authorization code exchange failed.' })
@@ -91,7 +102,8 @@ router.post('/login', async (req, res) => {
   try {
     ;({ body: me } = await spotifyApi.getMe())
   } catch (err) {
-    console.error('Spotify getMe failed:', err && err.statusCode, err && err.body)
+    logger.error({ err: err?.message, statusCode: err?.statusCode }, 'spotify.getMe_failed')
+    trackException(err, { route: 'spotify.login.getMe' })
     const status = err && err.statusCode === 403 ? 403 : 502
     const message =
       status === 403
@@ -123,7 +135,8 @@ router.post('/login', async (req, res) => {
     req.session.expiresIn = tokenBody.expires_in
     req.session.expiresAt = Date.now() + tokenBody.expires_in * 1000
 
-    console.log(`${req.session.email} logged in successfully!`)
+    logger.info({ userIdHash: hashUserId(req.session.email) }, 'spotify.login.success')
+    trackEvent('spotify.login.success', { product: me.product, userIdHash: hashUserId(req.session.email) })
 
     const [profile] = await Profile.findOrCreate({
       where: { userEmail: req.session.email },
@@ -131,7 +144,8 @@ router.post('/login', async (req, res) => {
 
     return res.json(buildUserPayload(req.session, profile))
   } catch (err) {
-    console.error('Login persistence failed:', err)
+    logger.error({ err: err?.message, stack: err?.stack }, 'spotify.login.persistence_failed')
+    trackException(err, { route: 'spotify.login.persistence' })
     return res
       .status(500)
       .json({ error: 'login_persist_failed', message: 'Failed to persist user session.' })

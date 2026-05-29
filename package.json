@@ -15,8 +15,8 @@
     "dev": "concurrently -k -n web,api -c blue,green \"npm:dev:web\" \"npm:dev:api\"",
     "dev:web": "cross-env NODE_ENV=development vite",
     "dev:api": "cross-env NODE_ENV=development PORT=3001 nodemon --delay 500ms server/index.js --ignore dist/ --ignore client/ --ignore debug/ --ignore public/audio/ --ignore .tmp/",
-    "build": "vite build",
-    "build:prod": "vite build",
+    "build": "npm run optimize:images && vite build",
+    "build:prod": "npm run optimize:images && vite build",
     "preview": "vite preview",
     "start": "node server/index.js",
     "prompt": "node scripts/prompt-lab.js",
@@ -26,6 +26,8 @@
     "seed:station-covers": "node scripts/seed-station-covers.js",
     "search:station-covers": "node scripts/search-station-covers.js",
     "design:station-covers": "node scripts/design-station-covers.js",
+    "optimize:images": "node scripts/optimize-images.js",
+    "build:pwa-icons": "node scripts/build-pwa-icons.js",
     "eval": "promptfoo eval -c evals/promptfooconfig.yaml",
     "eval:fresh": "promptfoo eval -c evals/promptfooconfig.yaml --no-cache",
     "eval:promote": "node scripts/promote-eval.js",
@@ -43,7 +45,10 @@
     "node": ">=22.0.0"
   },
   "dependencies": {
+    "@azure/identity": "^4.0.0",
+    "@azure/storage-blob": "^12.17.0",
     "@google/genai": "^1.0.0",
+    "applicationinsights": "^3.0.0",
     "axios": "^1.7.0",
     "connect-session-sequelize": "^7.1.7",
     "dotenv": "^16.4.0",
@@ -52,6 +57,7 @@
     "nunjucks": "^3.2.4",
     "pg": "^8.11.5",
     "pino": "^9.0.0",
+    "pino-http": "^10.0.0",
     "pino-pretty": "^11.0.0",
     "play-sound": "^1.1.6",
     "react-icons": "^5.0.0",
@@ -62,6 +68,8 @@
     "volleyball": "^1.5.1"
   },
   "devDependencies": {
+    "@microsoft/applicationinsights-react-js": "^17.3.0",
+    "@microsoft/applicationinsights-web": "^3.3.0",
     "@radix-ui/react-avatar": "^1.1.11",
     "@radix-ui/react-dialog": "^1.1.15",
     "@radix-ui/react-dropdown-menu": "^2.1.16",
@@ -95,11 +103,13 @@
     "react-spotify-web-playback": "^0.14.0",
     "redux": "^5.0.0",
     "redux-logger": "^3.0.6",
+    "sharp": "^0.34.0",
     "swiper": "^11.0.0",
     "tailwind-merge": "^2.5.0",
     "tailwindcss": "^4.0.0",
     "vaul": "^1.0.0",
     "vite": "^5.4.0",
+    "vite-plugin-pwa": "^0.20.0",
     "yup": "^1.4.0"
   }
 }

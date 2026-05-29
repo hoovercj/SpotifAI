@@ -37,8 +37,8 @@ import {
   clearExclusiveDj,
 } from "../../store/djPreferencesSlice"
 import { useSpotifyPlayer } from "./useSpotifyPlayer"
-import DjOnAirIndicator from "./DjOnAirIndicator"
 import DjAvatarTile from "./DjAvatarTile"
+import { getImageSources } from "@/lib/image"
 
 function formatTime(ms) {
   if (!ms || ms < 0) return "0:00"
@@ -575,7 +575,6 @@ export default function NowPlayingScreen() {
                       ? track.artists.map((a) => a.name).join(", ")
                       : ""}
                   </p>
-                  <DjOnAirIndicator className="mt-2" />
                 </div>
 
                 {/* Seek */}
@@ -674,17 +673,28 @@ export default function NowPlayingScreen() {
                     className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-muted-foreground"
                     aria-hidden="true"
                   >
-                    {dj?.details?.image ? (
-                      <img
-                        src={dj.details.image}
-                        alt=""
-                        className="h-7 w-7 rounded-full object-cover"
-                      />
-                    ) : (
-                      <span className="text-[10px] font-semibold uppercase tracking-wide">
-                        DJ
-                      </span>
-                    )}
+                    {(() => {
+                      const s = getImageSources(dj?.details?.image, "thumb")
+                      if (!s.jpg && !s.webp) {
+                        return (
+                          <span className="text-[10px] font-semibold uppercase tracking-wide">
+                            DJ
+                          </span>
+                        )
+                      }
+                      return (
+                        <picture>
+                          {s.webp && <source srcSet={s.webp} type="image/webp" />}
+                          <img
+                            src={s.jpg || s.webp}
+                            alt=""
+                            className="h-7 w-7 rounded-full object-cover"
+                            loading="lazy"
+                            decoding="async"
+                          />
+                        </picture>
+                      )
+                    })()}
                   </div>
                   <Slider
                     min={0}

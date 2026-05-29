@@ -798,6 +798,23 @@ export function PlayerProvider({ children }) {
   const previous = useCallback(() => playerRef.current?.player?.previousTrack(), [])
   const seek = useCallback((ms) => playerRef.current?.player?.seek(ms), [])
 
+  // Hard-stop everything currently playing: Spotify music + the DJ overlay
+  // + any scheduled DJ break. Called by useStartSession when the user picks
+  // a new session so the old tracks don't keep playing under the new
+  // intro (which routes through its own <audio> and would otherwise
+  // overlay at full volume on top of the old session's music).
+  const stopCurrentPlayback = useCallback(() => {
+    window.clearTimeout(djAudioTimeoutRef.current)
+    window.clearTimeout(delayNextTrackTimeoutRef.current)
+    delayNextTrackRef.current = false
+    trackDelaySetRef.current = false
+    djAudioPendingRef.current = false
+    needNextDjAudioRef.current = true
+    try { audioRef.current?.pause() } catch (_) { /* noop */ }
+    dispatch(setDjSpeaking(false))
+    try { playerRef.current?.player?.pause() } catch (_) { /* noop */ }
+  }, [dispatch])
+
   const selectDj = useCallback(
     (dj) => {
       dispatch(setStoreCurrentDj(dj))
@@ -853,6 +870,108 @@ export function PlayerProvider({ children }) {
       .catch((err) => console.warn("setDevice failed:", err))
   }, [deviceId, accessToken])
 
+  // ── Media Session integration ─────────────────────────────────────────
+  // Surfaces the current track's metadata + transport controls to the
+  // OS lock screen, Bluetooth headphones, and the headphone media
+  // keys. Re-runs whenever the current track changes; ignored on
+  // browsers without support (older Safari, etc.).
+  const isPlayingForMS = useSelector((s) => s.player?.isPlaying)
+  useEffect(() => {
+    if (typeof navigator === "undefined" || !navigator.mediaSession) return
+    if (!playerCurrentTrack) {
+      try {
+        navigator.mediaSession.metadata = null
+        navigator.mediaSession.playbackState = "none"
+      } catch (_) { /* noop */ }
+      return
+    }
+    const artworkUrl = playerCurrentTrack.image
+    try {
+      navigator.mediaSession.metadata = new window.MediaMetadata({
+        title: playerCurrentTrack.name || "",
+        artist: Array.isArray(playerCurrentTrack.artists)
+          ? playerCurrentTrack.artists.map((a) => a.name).join(", ")
+          : "",
+        album: playerCurrentSession?.name || "",
+        artwork: artworkUrl
+          ? [
+              { src: artworkUrl, sizes: "96x96", type: "image/jpeg" },
+              { src: artworkUrl, sizes: "192x192", type: "image/jpeg" },
+              { src: artworkUrl, sizes: "256x256", type: "image/jpeg" },
+              { src: artworkUrl, sizes: "512x512", type: "image/jpeg" },
+            ]
+          : [],
+      })
+      navigator.mediaSession.playbackState = isPlayingForMS ? "playing" : "paused"
+    } catch (_) { /* noop on older Safari */ }
+  }, [playerCurrentTrack, playerCurrentSession?.name, isPlayingForMS])
+
+  useEffect(() => {
+    if (typeof navigator === "undefined" || !navigator.mediaSession) return
+    const handlers = {
+      play: () => { try { playerRef.current?.player?.resume() } catch (_) {} },
+      pause: () => { try { playerRef.current?.player?.pause() } catch (_) {} },
+      previoustrack: () => { try { playerRef.current?.player?.previousTrack() } catch (_) {} },
+      nexttrack: () => { try { playerRef.current?.player?.nextTrack() } catch (_) {} },
+      seekto: (details) => {
+        const pos = Math.max(0, Math.floor((details?.seekTime || 0) * 1000))
+        try { playerRef.current?.player?.seek(pos) } catch (_) {}
+      },
+    }
+    for (const [action, handler] of Object.entries(handlers)) {
+      try {
+        navigator.mediaSession.setActionHandler(action, handler)
+      } catch (_) { /* unsupported action — Safari ignores some */ }
+    }
+    return () => {
+      for (const action of Object.keys(handlers)) {
+        try {
+          navigator.mediaSession.setActionHandler(action, null)
+        } catch (_) { /* noop */ }
+      }
+    }
+  }, [])
+
+  // ── WakeLock ──────────────────────────────────────────────────────────
+  // Best-effort: while the user is actively playing music we ask the
+  // OS to not suspend the tab so playback (and the DJ audio overlay)
+  // keeps running with the screen off. WakeLock auto-releases on
+  // tab visibility change; we re-acquire on visibilitychange.
+  const wakeLockRef = useRef(null)
+  useEffect(() => {
+    if (typeof navigator === "undefined" || !navigator.wakeLock) return
+    let released = false
+
+    const acquire = async () => {
+      if (!isPlayingForMS) return
+      try {
+        wakeLockRef.current = await navigator.wakeLock.request("screen")
+      } catch (_) {
+        wakeLockRef.current = null
+      }
+    }
+    const release = () => {
+      const lock = wakeLockRef.current
+      wakeLockRef.current = null
+      if (lock && !released) {
+        lock.release?.().catch(() => {})
+      }
+    }
+    const onVisibility = () => {
+      if (document.visibilityState === "visible" && isPlayingForMS) {
+        acquire()
+      }
+    }
+
+    if (isPlayingForMS) acquire(); else release()
+    document.addEventListener("visibilitychange", onVisibility)
+    return () => {
+      released = true
+      document.removeEventListener("visibilitychange", onVisibility)
+      release()
+    }
+  }, [isPlayingForMS])
+
   const value = useMemo(
     () => ({
       playTracks,
@@ -868,6 +987,7 @@ export function PlayerProvider({ children }) {
       seek,
       selectDj,
       playDjAudio,
+      stopCurrentPlayback,
     }),
     [
       playTracks,
@@ -883,6 +1003,7 @@ export function PlayerProvider({ children }) {
       seek,
       selectDj,
       playDjAudio,
+      stopCurrentPlayback,
     ]
   )
 

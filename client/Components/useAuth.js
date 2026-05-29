@@ -5,6 +5,7 @@ import { fetchProfile } from "../store/userSlice"
 import { setJamSessionId } from "../store/jamSessionSlice"
 import { useNavigate } from "react-router-dom"
 import axios from "axios"
+import { setAuthUser } from "../lib/telemetry"
 
 export default function useAuth(code) {
   const [accessToken, setAccessToken] = useState()
@@ -42,6 +43,7 @@ export default function useAuth(code) {
         dispatch(setUser(response.data))
         dispatch(fetchProfile())
         dispatch(setJamSessionId())
+        if (response.data?.userIdHash) setAuthUser(response.data.userIdHash)
         setAccessToken(response.data.accessToken)
         setExpiresIn(response.data.expiresIn)
 

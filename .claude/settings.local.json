@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(az account *)",
+      "Bash(az webapp *)",
+      "Read(//c/Users/cohoov/AppData/Local/Temp/**)",
+      "Bash(unzip -o applogs.zip -d applogs)",
+      "Bash(xargs ls -la)"
+    ]
+  }
+}

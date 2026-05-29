@@ -4,6 +4,7 @@ import { Sparkles } from "lucide-react"
 import BottomTabBar from "./BottomTabBar"
 import AccountMenu from "./AccountMenu"
 import NowPlayingBar from "../player/NowPlayingBar"
+import ServiceWorkerUpdateToast from "./ServiceWorkerUpdateToast"
 
 /**
  * AppShell wraps the three authenticated tabs. It composes:
@@ -41,6 +42,7 @@ export default function AppShell() {
         <NowPlayingBar />
         <BottomTabBar />
       </div>
+      <ServiceWorkerUpdateToast />
     </div>
   )
 }

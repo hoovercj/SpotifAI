@@ -20,11 +20,12 @@ const { resolveStationCover } = require("../../aiStations/resolveStationCover")
 const { djCharacters } = require("../../djCharacters")
 const { seedKey } = require("../seedKey")
 
-async function fromStation({ seed, spotifyAccessToken }) {
+async function fromStation({ seed, spotifyAccessToken, userEmail }) {
   const result = await startStation({
     genreId: seed.genreId,
     stationId: seed.stationId,
     spotifyAccessToken,
+    userEmail,
   })
 
   // Re-derive the descriptor from the catalog so we don't have to thread

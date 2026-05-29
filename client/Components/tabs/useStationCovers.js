@@ -88,9 +88,17 @@ export function useStationCovers() {
 }
 
 /**
- * Helper to look up a single cover URL. Returns `null` if the map
- * hasn't loaded yet OR if no cover is resolved for that station.
- * Callers should treat both cases as "show the gradient fallback".
+ * Helper to look up a single cover image descriptor. Returns `null`
+ * if the map hasn't loaded yet OR if no cover is resolved for that
+ * station. Callers should treat both cases as "show the gradient
+ * fallback".
+ *
+ * The returned value is an image descriptor object compatible with
+ * `client/lib/image.js` (getImageSources/getImageUrl) — `{ src,
+ * thumb?: {webp, jpg}, full?: {webp, jpg} }` — or null. Older code
+ * passing the result directly as `<img src>` still works via the
+ * `src` field acting as a string-coercion fallback when consumers
+ * call `getImageUrl(...)`.
  */
 export function getStationCover(covers, { genreId, stationId }) {
   if (!covers || !genreId || !stationId) return null

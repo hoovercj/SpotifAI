@@ -12,6 +12,8 @@
 const { GoogleGenAI } = require("@google/genai")
 const SpotifyWebApi = require("spotify-web-api-node")
 const { loadPrompt } = require("../utl/loadPrompt")
+const { trackEvent, trackDependency } = require("../telemetry")
+const logger = require("../logger")
 
 const TARGET_TRACKS = 30
 // Ask Gemini for a few extra so we still hit 30 after Spotify mismatches.
@@ -139,8 +141,17 @@ async function generateStationTracks({ genre, station, spotifyAccessToken }) {
   if (!spotifyAccessToken) {
     throw new Error("generateStationTracks requires a spotifyAccessToken")
   }
+  const t0 = Date.now()
   const candidates = await askGemini(genre, station)
-  if (candidates.length === 0) return []
+  if (candidates.length === 0) {
+    trackEvent("station.tracks.generated", {
+      genreId: genre.id,
+      stationId: station.id,
+      candidates: 0,
+      resolved: 0,
+    })
+    return []
+  }
 
   const api = new SpotifyWebApi()
   api.setAccessToken(spotifyAccessToken)
@@ -151,14 +162,24 @@ async function generateStationTracks({ genre, station, spotifyAccessToken }) {
   // serial sweep with a ~120ms gap finishes in ~5s and stays well under
   // the documented thresholds.
   let rateLimited = false
+  let rateLimitedCount = 0
   const resolved = []
+  const searchStart = Date.now()
   for (const candidate of candidates) {
     const track = await resolveOnSpotify(api, candidate, {
       onRateLimit: () => {
         rateLimited = true
+        rateLimitedCount++
       },
     })
     if (track === RATE_LIMITED) {
+      trackDependency(
+        "spotify",
+        "spotify.search.batch",
+        Date.now() - searchStart,
+        false,
+        { rateLimited: true, resolved: resolved.length }
+      )
       const err = new Error(
         "Spotify rate-limited the station generation. Wait a minute and try again."
       )
@@ -171,6 +192,17 @@ async function generateStationTracks({ genre, station, spotifyAccessToken }) {
       await sleep(120)
     }
   }
+  trackDependency(
+    "spotify",
+    "spotify.search.batch",
+    Date.now() - searchStart,
+    true,
+    {
+      attempted: candidates.length,
+      resolvedCount: resolved.filter(Boolean).length,
+      rateLimited429s: rateLimitedCount,
+    }
+  )
 
   const seen = new Set()
   const out = []
@@ -188,6 +220,16 @@ async function generateStationTracks({ genre, station, spotifyAccessToken }) {
     err.status = 429
     throw err
   }
+
+  trackEvent(
+    "station.tracks.generated",
+    { genreId: genre.id, stationId: station.id },
+    {
+      ms: Date.now() - t0,
+      candidates: candidates.length,
+      resolved: out.length,
+    }
+  )
 
   return out
 }

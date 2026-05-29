@@ -21,19 +21,24 @@ export class App extends Component {
 
   render() {
     const code = new URLSearchParams(window.location.search).get("code")
-    const sessionLoading = this.props.user?.sessionLoading
     const accessToken = this.props.user?.details?.accessToken
-
-    if (sessionLoading && !code) {
+    
+    // Render the authed app the moment we have either a fresh OAuth code or
+    // a live access token. Must come before the sessionLoading check —
+    // restoreSession is intentionally skipped on the OAuth callback, so
+    // sessionLoading stays `true` forever on that path, and useAuth's
+    // pushState clearing of `?code` would otherwise trip the spinner.
+    if (code || accessToken) {
+      return <AppAuthWrapper code={code || null} />
+    }
+    
+    const sessionLoading = this.props.user?.sessionLoading
+    if (sessionLoading) {
       return (
         <div className="grid min-h-dvh w-full place-items-center bg-background text-foreground">
           <Loader2 className="h-8 w-8 animate-spin text-fuchsia-400" />
         </div>
       )
-    }
-
-    if (code || accessToken) {
-      return <AppAuthWrapper code={code || null} />
     }
 
     return (

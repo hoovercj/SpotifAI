@@ -42,7 +42,9 @@ const { loadPersonaMetadata } = require('../utl/loadPersonas')
 const PROJECT_ROOT = path.resolve(__dirname, '..', '..', '..')
 const PUBLIC_DIR = path.join(PROJECT_ROOT, 'public')
 const STATIONS_DIR = path.join(PUBLIC_DIR, 'images', 'stations')
+const STATIONS_OPTIMIZED_DIR = path.join(STATIONS_DIR, 'optimized')
 const DJS_DIR = path.join(PUBLIC_DIR, 'images', 'djs')
+const DJS_OPTIMIZED_DIR = path.join(DJS_DIR, 'optimized')
 
 // Build the `djId → image filename` map once at module load. The
 // roster is static between deploys (it lives in personas/*.md) so
@@ -73,27 +75,66 @@ function bakedCoverFilename(genreId, stationId) {
 // future-proofing tier in case we ever export with `sharp`.
 const COVER_EXTENSIONS = ['png', 'jpg', 'jpeg', 'webp']
 
+// Build an image-descriptor object matching the shape used by DJ
+// portraits in loadPersonas: { src, thumb?: {webp,jpg}, full?: {webp,jpg} }.
+// Looks for `<base>.thumb.webp`, `<base>.thumb.jpg`, etc. under the
+// given optimized directory. When no optimized variants exist, returns
+// just `{ src }` so callers always get at least the original URL.
+function buildImageDescriptor(urlBase, fsBase, optimizedDir, baseName) {
+  const has = (p) => fs.existsSync(p)
+  const url = (p) => `${urlBase}/optimized/${p}`
+  const desc = { src: `${urlBase}/${fsBase}` }
+  const thumbWebp = path.join(optimizedDir, `${baseName}.thumb.webp`)
+  const thumbJpg = path.join(optimizedDir, `${baseName}.thumb.jpg`)
+  const fullWebp = path.join(optimizedDir, `${baseName}.full.webp`)
+  const fullJpg = path.join(optimizedDir, `${baseName}.full.jpg`)
+  if (has(thumbWebp) || has(thumbJpg)) {
+    desc.thumb = {
+      webp: has(thumbWebp) ? url(`${baseName}.thumb.webp`) : null,
+      jpg: has(thumbJpg) ? url(`${baseName}.thumb.jpg`) : null,
+    }
+  }
+  if (has(fullWebp) || has(fullJpg)) {
+    desc.full = {
+      webp: has(fullWebp) ? url(`${baseName}.full.webp`) : null,
+      jpg: has(fullJpg) ? url(`${baseName}.full.jpg`) : null,
+    }
+  }
+  return desc
+}
+
 /**
  * Resolve the cover URL for one station, walking the preference order
  * above. Exported so the bake script + tests can call it without
  * rebuilding the whole catalog map.
+ *
+ * Returns an object `{ src, thumb?, full? }` or `null` when no source
+ * image exists.
  */
 function resolveStationCover({ genreId, stationId, djId }) {
   // Tier 1: pre-baked Gemini cover OR human-picked photo cover.
-  // Both flows write into the same `public/images/stations/` dir;
-  // we just allow either png/jpg/jpeg/webp so picking from Unsplash
-  // (jpg) and from the Gemini bake (png) can coexist.
   for (const ext of COVER_EXTENSIONS) {
-    const name = `${genreId}-${stationId}.${ext}`
-    if (fs.existsSync(path.join(STATIONS_DIR, name))) {
-      return `/images/stations/${name}`
+    const fsBase = `${genreId}-${stationId}.${ext}`
+    if (fs.existsSync(path.join(STATIONS_DIR, fsBase))) {
+      return buildImageDescriptor(
+        '/images/stations',
+        fsBase,
+        STATIONS_OPTIMIZED_DIR,
+        `${genreId}-${stationId}`
+      )
     }
   }
   // Tier 2: DJ portrait
   const djImage = getDjImageById().get(djId)
   if (djImage) {
     if (fs.existsSync(path.join(DJS_DIR, djImage))) {
-      return `/images/djs/${djImage}`
+      const baseName = djImage.replace(/\.(png|jpe?g|webp)$/i, '')
+      return buildImageDescriptor(
+        '/images/djs',
+        djImage,
+        DJS_OPTIMIZED_DIR,
+        baseName
+      )
     }
   }
   // Tier 3: nothing on disk — client falls back to gradient

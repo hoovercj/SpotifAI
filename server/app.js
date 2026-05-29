@@ -6,6 +6,7 @@ const app = express();
 // refuses to set our `secure: true` cookie in production, so sign-in silently
 // fails to persist a session.
 app.set("trust proxy", 1);
+const crypto = require("node:crypto");
 const session = require("express-session");
 const conn = require("./db/conn");
 const { User } = require("./db");
@@ -17,15 +18,59 @@ const httpServer = createServer(app);
 const { Server } = require("socket.io");
 const io = new Server(httpServer, { cors: { origin: "*" } });
 const path = require("path");
-const volleyball = require("volleyball");
+const logger = require("./services/logger");
+const pinoHttp = require("pino-http");
 
-app.use(volleyball);
+// Per-request UUID stamped onto every log line + every App Insights
+// correlation. Honor an upstream X-Request-Id (so a load balancer or
+// e2e test harness can thread one through) but mint our own when
+// absent. Echoed back in the response so the client can include it
+// in error reports.
+app.use((req, res, next) => {
+  const headerId = req.headers["x-request-id"];
+  req.requestId =
+    typeof headerId === "string" && headerId.length > 0 && headerId.length < 100
+      ? headerId
+      : crypto.randomUUID();
+  res.setHeader("X-Request-Id", req.requestId);
+  next();
+});
+
+app.use(
+  pinoHttp({
+    logger,
+    customProps: (req) => ({ requestId: req.requestId }),
+    // Spotify auth headers + cookies are noise. Don't log them.
+    redact: {
+      paths: [
+        "req.headers.authorization",
+        "req.headers.cookie",
+        "res.headers['set-cookie']",
+      ],
+      remove: true,
+    },
+    // Health checks are noisy. Log them at debug so they don't
+    // dominate the info stream in prod.
+    customLogLevel: (_req, res, err) => {
+      if (err || res.statusCode >= 500) return "error";
+      if (res.statusCode >= 400) return "warn";
+      if (res.req?.url === "/healthz" || res.req?.url === "/readyz") return "debug";
+      return "info";
+    },
+  })
+);
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
 //sets session flag to true to indicate first load of app. This will be set to false after first song.
 const sessionFlag = require("./services/utl/globalVariableModule");
 sessionFlag.set(true);
+
+// Health endpoints — mounted at the root (NOT under /api) so probes
+// don't need to know about our routing convention. Wired to the App
+// Service health-check path in infra/modules/appService.bicep.
+app.use(require("./routes/health"));
 
 // Static asset serving:
 // - In production, Vite builds the client to dist/ and Express serves it directly.
@@ -75,14 +120,17 @@ app.get(/^\/(?!api\/).*/, (req, res, next) => {
 });
 
 app.use((err, req, res, next) => {
-  console.error(err.stack);
+  logger.error(
+    { err: err?.message, stack: err?.stack, requestId: req.requestId },
+    "express.unhandled"
+  );
   res.status(err.status || 500).send(err.message || "Internal server error");
 });
 
 io.on("connection", (socket) => {
-  console.log("user connected");
+  logger.debug("socket.connected");
   socket.on("disconnect", function () {
-    console.log("user disconnected");
+    logger.debug("socket.disconnected");
   });
 });
 

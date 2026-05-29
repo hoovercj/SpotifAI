@@ -38,7 +38,16 @@ const spotifyPlaylistsSlice = createSlice({
       }
     },
     addPlaylists: (state, action) => {
-      state.allPlaylists = [...state.allPlaylists, ...action.payload]
+      // Dedupe by id — fetchUserPlaylists re-fires on every accessToken
+      // change (initial login, token refresh) and would otherwise append
+      // duplicates, causing duplicate React keys in the Home tab row.
+      const seen = new Set(state.allPlaylists.map((p) => p.id))
+      for (const p of action.payload) {
+        if (!seen.has(p.id)) {
+          state.allPlaylists.push(p)
+          seen.add(p.id)
+        }
+      }
     },
     removePlaylist: (state, action) => {
       state.allPlaylists = state.allPlaylists.filter(

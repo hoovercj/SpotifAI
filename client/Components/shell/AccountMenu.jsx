@@ -1,6 +1,7 @@
 import React from "react"
 import { useDispatch, useSelector } from "react-redux"
-import { LogOut, UserCircle2 } from "lucide-react"
+import { useNavigate } from "react-router-dom"
+import { LogOut, UserCircle2, ShieldCheck } from "lucide-react"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -18,6 +19,7 @@ import { logoutUser, showProfile } from "../../store/userSlice"
  */
 export default function AccountMenu() {
   const dispatch = useDispatch()
+  const navigate = useNavigate()
   const profile = useSelector((s) => s.user?.profile)
   const details = useSelector((s) => s.user?.details)
   const displayName = profile?.name || details?.displayName || details?.id || "Account"
@@ -50,6 +52,10 @@ export default function AccountMenu() {
         <DropdownMenuItem onClick={() => dispatch(showProfile())}>
           <UserCircle2 />
           Profile
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => navigate("/privacy")}>
+          <ShieldCheck />
+          Privacy
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => dispatch(logoutUser())}>
           <LogOut />

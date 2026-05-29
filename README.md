@@ -6,6 +6,19 @@ Forked from [chrisallenarmbruster/wyou-radio](https://github.com/chrisallenarmbr
 
 > **Status:** active development — APIs and segment formats may shift.
 
+## Documentation
+
+| Doc | When you need it |
+|---|---|
+| [docs/architecture.md](docs/architecture.md) | System map, repo layout, the four critical flows |
+| [docs/local-development.md](docs/local-development.md) | Bringing the dev environment up, VS Code tasks, gotchas |
+| [docs/conventions.md](docs/conventions.md) | Code style, route shape, logging, slice patterns |
+| [docs/observability.md](docs/observability.md) | Telemetry events, Kusto run-book, opt-out |
+| [.github/copilot-instructions.md](.github/copilot-instructions.md) | What to feed GitHub Copilot — also a fast human onboarding read |
+| [AGENTS.md](AGENTS.md) | Same, for non-Copilot agents (Claude Code, Cursor, etc.) |
+| [personas/README.md](personas/README.md) | Adding or editing a DJ persona |
+| [prompts/README.md](prompts/README.md) | Editing the LLM prompt templates |
+
 ---
 
 ## What it does

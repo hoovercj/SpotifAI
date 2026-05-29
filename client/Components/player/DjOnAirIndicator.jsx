@@ -1,6 +1,7 @@
 import React from "react"
 import { useSelector } from "react-redux"
 import { cn } from "@/lib/utils"
+import { getImageSources } from "@/lib/image"
 
 /**
  * Persistent DJ chip shown next to the track title in the mini-player
@@ -23,7 +24,7 @@ export default function DjOnAirIndicator({ className }) {
 
   const name = dj.djName || ""
   const firstName = name.split(/\s+/)[0] || name
-  const img = dj.details?.image || null
+  const sources = getImageSources(dj.details?.image, "thumb")
   const initials = initialsFor(name)
   const gradient = gradientFor(dj.id)
 
@@ -37,8 +38,17 @@ export default function DjOnAirIndicator({ className }) {
       title={djSpeaking ? `DJ ${name} on air` : `DJ ${name}`}
     >
       <span className="relative h-5 w-5 shrink-0 overflow-hidden rounded-full">
-        {img ? (
-          <img src={img} alt="" className="h-full w-full object-cover" />
+        {sources.jpg || sources.webp ? (
+          <picture>
+            {sources.webp && <source srcSet={sources.webp} type="image/webp" />}
+            <img
+              src={sources.jpg || sources.webp}
+              alt=""
+              className="h-full w-full object-cover"
+              loading="lazy"
+              decoding="async"
+            />
+          </picture>
         ) : (
           <span
             className={cn(

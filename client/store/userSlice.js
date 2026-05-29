@@ -6,6 +6,7 @@ import {
   setCurrentContext,
 } from './playerSlice'
 import { setCurrentDj } from './djsSlice'
+import { setAuthUser, clearAuthUser } from '../lib/telemetry'
 
 const initialState = {
   code: null,
@@ -94,6 +95,9 @@ export const restoreSession = () => async (dispatch) => {
     const { data } = await axios.get('/api/spotify/session')
     const { profile, ...details } = data
     dispatch(setUser(details))
+    // Identify the user to App Insights using the server-supplied
+    // HMAC hash. The plain email never leaves our DB.
+    if (details?.userIdHash) setAuthUser(details.userIdHash)
     if (profile) dispatch(setProfile(profile))
   } catch (err) {
     if (err?.response?.status !== 401) {
@@ -120,6 +124,7 @@ export const logoutUser = () => async (dispatch) => {
   dispatch(setCurrentContext(null))
   dispatch(setCurrentDj(null))
   clearPersistedPlayer()
+  clearAuthUser()
   dispatch(clearUser())
 }
 

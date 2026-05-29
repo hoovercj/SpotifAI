@@ -7,6 +7,7 @@ import AppShell from "./shell/AppShell"
 import HomeTab from "./tabs/HomeTab"
 import SearchTab from "./tabs/SearchTab"
 import LibraryTab from "./tabs/LibraryTab"
+import PrivacyPage from "./PrivacyPage"
 import { PlayerProvider } from "./player/PlayerProvider"
 import NowPlayingScreen from "./player/NowPlayingScreen"
 import { fetchDjs } from "../store/djsSlice"
@@ -47,6 +48,7 @@ export default function AppAuthWrapper({ code }) {
           <Route path="/home" element={<HomeTab />} />
           <Route path="/search" element={<SearchTab />} />
           <Route path="/library" element={<LibraryTab />} />
+          <Route path="/privacy" element={<PrivacyPage />} />
           {/* Backwards-compat: old HashRouter paths used /radio/* */}
           <Route path="/radio/*" element={<Navigate to="/home" replace />} />
           <Route path="*" element={<Navigate to="/home" replace />} />

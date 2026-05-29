@@ -71,6 +71,17 @@ module monitoring 'modules/monitoring.bicep' = {
   }
 }
 
+module appInsights 'modules/appInsights.bicep' = {
+  name: 'appInsights'
+  scope: rg
+  params: {
+    location: location
+    tags: tags
+    resourceToken: resourceToken
+    logAnalyticsWorkspaceId: monitoring.outputs.logAnalyticsWorkspaceId
+  }
+}
+
 module postgres 'modules/postgresql.bicep' = {
   name: 'postgresql'
   scope: rg
@@ -82,6 +93,13 @@ module postgres 'modules/postgresql.bicep' = {
     adminPassword: postgresAdminPassword
   }
 }
+
+// Storage account name follows a deterministic convention matching
+// modules/storage.bicep — we precompute it here so we can wire it
+// into App Service env vars before the storage module deploys, and
+// the storage module asserts on the same name.
+var storageAccountName = take(toLower(replace('st${resourceToken}', '-', '')), 24)
+var storageIntrosContainer = 'audio-intros'
 
 module web 'modules/appService.bicep' = {
   name: 'web'
@@ -101,6 +119,24 @@ module web 'modules/appService.bicep' = {
     locationIqApiKey: locationIqApiKey
     rejseplanenAccessId: rejseplanenAccessId
     adminEmails: adminEmails
+    appInsightsConnectionString: appInsights.outputs.connectionString
+    storageAccountName: storageAccountName
+    storageIntrosContainer: storageIntrosContainer
+  }
+}
+
+// Storage Account + role assignment for the App Service managed
+// identity. Created AFTER the app service so we have a principalId
+// for the role assignment.
+module storage 'modules/storage.bicep' = {
+  name: 'storage'
+  scope: rg
+  params: {
+    location: location
+    tags: tags
+    resourceToken: resourceToken
+    appServicePrincipalId: web.outputs.principalId
+    introsContainerName: storageIntrosContainer
   }
 }
 
@@ -109,3 +145,6 @@ output AZURE_RESOURCE_GROUP string = rg.name
 output WEB_URI string = web.outputs.uri
 output WEB_NAME string = web.outputs.name
 output WEB_DEFAULT_HOSTNAME string = web.outputs.defaultHostName
+output APPLICATIONINSIGHTS_CONNECTION_STRING string = appInsights.outputs.connectionString
+output AZURE_STORAGE_ACCOUNT string = storage.outputs.storageAccountName
+output AZURE_STORAGE_BLOB_ENDPOINT string = storage.outputs.blobEndpoint

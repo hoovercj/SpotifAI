@@ -19,13 +19,14 @@
  * <repo>/runtime/audio/ (gitignored runtime output), returns the
  * /audio/<basename> URL the client can drop into <audio>.
  */
-const path = require("node:path")
 const { djCharacters } = require("../djCharacters")
 const { createChatSession } = require("../llm")
 const { buildDJSystemPrompt } = require("../llm/buildDJSystemPrompt")
 const { loadPrompt } = require("../utl/loadPrompt")
 const { buildTtsPrompt } = require("../utl/buildTtsPrompt")
-const { synthesize } = require("../tts")
+const { synthesizeBuffer } = require("../tts")
+const { getOrGenerateIntro } = require("../intros/getOrGenerateIntro")
+const { loadPersonaMetadata } = require("../utl/loadPersonas")
 
 const VALID_SEED_TYPES = new Set(["mood", "track", "artist", "playlist"])
 const VALID_MODES = new Set(["cold", "warm"])
@@ -59,47 +60,54 @@ async function createSessionIntro({
   if (seedType === "track" && !context.artistName) {
     throw new Error("createSessionIntro: track seed requires context.artistName")
   }
+  if (!sessionKey) {
+    throw new Error("createSessionIntro: sessionKey is required (seedKey from caller)")
+  }
 
-  // 1. Resolve persona + voice.
+  // 1. Resolve persona + voice + slug.
   const persona = await djCharacters(djId)
   const voiceId = persona?.details?.voiceID
   if (!voiceId) {
     throw new Error(`createSessionIntro: no voiceID on DJ ${djId}`)
   }
   const ttsDirection = persona?.details?.ttsDirection
+  const personaSlug = persona?.slug
+    || loadPersonaMetadata().find((m) => Number(m.id) === Number(djId))?.slug
+  if (!personaSlug) {
+    throw new Error(`createSessionIntro: no slug for DJ ${djId}`)
+  }
 
-  // 2. Ask Gemini for the script. Chat session id includes the session
-  // key so multiple in-flight intros don't clobber each other's state.
-  const chat = await createChatSession({
-    systemInstruction: buildDJSystemPrompt(persona),
-    sessionId: `session-intro:${djId}:${sessionKey || seedType}`,
+  // 2. Blob-cache lookup keyed on (seedKey, djId). Generate on miss.
+  const { audioUrl, text, cached, blobPath } = await getOrGenerateIntro({
+    seedKey: sessionKey,
+    djId,
+    personaSlug,
+    generate: async () => {
+      const chat = await createChatSession({
+        systemInstruction: buildDJSystemPrompt(persona),
+        sessionId: `session-intro:${djId}:${sessionKey || seedType}`,
+      })
+      const userPrompt = buildIntroPrompt({ seedType, mode, context })
+      const scriptText = (await chat.sendMessage(userPrompt))?.trim()
+      if (!scriptText) throw new Error("createSessionIntro: empty LLM response")
+      const ttsInput = buildTtsPrompt({
+        djName: persona.djName,
+        ttsDirection,
+        transcript: scriptText,
+      })
+      const { wavBuffer } = await synthesizeBuffer({
+        text: ttsInput,
+        voiceId,
+      })
+      return { wavBuffer, text: scriptText }
+    },
   })
-  const userPrompt = buildIntroPrompt({ seedType, mode, context })
-  const text = (await chat.sendMessage(userPrompt))?.trim()
-  if (!text) throw new Error("createSessionIntro: empty LLM response")
-
-  // 3. Synthesize to WAV.
-  const ttsInput = buildTtsPrompt({
-    djName: persona.djName,
-    ttsDirection,
-    transcript: text,
-  })
-  const slug = (sessionKey || seedType).replace(/[^a-z0-9]+/gi, "_").slice(0, 40)
-  const baseName = `session_${djId}_${seedType}_${slug}_${Date.now()}`
-  const { filePath } = await synthesize({
-    text: ttsInput,
-    voiceId,
-    fileBaseName: baseName,
-  })
-
-  // filePath lives under runtime/audio/ (gitignored). Express + Vite both
-  // serve runtime/ and public/ at the URL root, so /audio/<basename>
-  // resolves regardless of which dir the file actually sits in.
-  const audioUrl = `/audio/${path.basename(filePath)}`
 
   return {
     audioUrl,
-    filePath,
+    filePath: null,
+    blobPath,
+    cached,
     text,
     djName: persona.djName,
   }

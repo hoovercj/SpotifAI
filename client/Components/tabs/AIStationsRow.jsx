@@ -4,6 +4,7 @@ import { useSelector } from "react-redux"
 import ScrollableRow from "../shell/ScrollableRow"
 import { useStartSession } from "../player/useStartSession"
 import { useStationCovers, getStationCover } from "./useStationCovers"
+import { getImageSources } from "@/lib/image"
 
 /**
  * Horizontal row of "AI Station" cards.
@@ -88,7 +89,11 @@ export default function AIStationsRow({ axis, axisId, stations }) {
 function StationCard({ station, coverUrl, onClick }) {
   const [from, to] = station.gradient || ["#a855f7", "#ec4899"]
   const [imageBroken, setImageBroken] = React.useState(false)
-  const showImage = coverUrl && !imageBroken
+  // coverUrl may be a string (legacy) OR an image descriptor object
+  // from useStationCovers — getImageSources handles both. Tiles are
+  // small (~160px) so thumb is plenty.
+  const sources = getImageSources(coverUrl, "thumb")
+  const showImage = (sources.jpg || sources.webp) && !imageBroken
   return (
     <button
       type="button"
@@ -97,14 +102,17 @@ function StationCard({ station, coverUrl, onClick }) {
       style={{ backgroundImage: `linear-gradient(135deg, ${from}, ${to})` }}
     >
       {showImage && (
-        <img
-          src={coverUrl}
-          alt=""
-          loading="lazy"
-          decoding="async"
-          onError={() => setImageBroken(true)}
-          className="absolute inset-0 h-full w-full object-cover transition-transform duration-200 group-hover:scale-105"
-        />
+        <picture>
+          {sources.webp && <source srcSet={sources.webp} type="image/webp" />}
+          <img
+            src={sources.jpg || sources.webp}
+            alt=""
+            loading="lazy"
+            decoding="async"
+            onError={() => setImageBroken(true)}
+            className="absolute inset-0 h-full w-full object-cover transition-transform duration-200 group-hover:scale-105"
+          />
+        </picture>
       )}
       {/* Bottom-up dark mask: keeps the title and badge readable on
           top of arbitrary cover art. Stops well before the top so the

@@ -12,6 +12,8 @@ const { convertFileToDataURI } = require('../services/utl/convertMP3FileToDataUR
 const currentWeather = require('../services/currentWeather')
 const { newsSegment } = require('../services/news')
 const { musicFactsSegment } = require('../services/musicFacts')
+const logger = require('../services/logger')
+const { trackEvent, trackException } = require('../services/telemetry')
 
 // Per-(jamSession, dj) chat sessions. Keyed so each DJ keeps an independent
 // conversation history within a single listening session, and multiple
@@ -110,7 +112,11 @@ router.post('/next-content', async (req, res) => {
     // Without this catch the route was crashing the request without any
     // surface-level log of what blew up. Print the full stack so future
     // failures are diagnosable from the server terminal.
-    console.error('POST /api/content/next-content failed:', err)
+    logger.error(
+      { err: err?.message, stack: err?.stack, requestId: req.requestId },
+      'content.next-content.failed'
+    )
+    trackException(err, { route: '/api/content/next-content' })
     res.status(500).json({
       error: 'next_content_failed',
       message: err?.message || 'Internal Server Error',

@@ -14,6 +14,7 @@ const fs = require('fs');
 const path = require('path');
 const { GoogleGenAI } = require('@google/genai');
 const { buildWavHeader } = require('./wavHeader');
+const { withDependency, trackEvent } = require('../telemetry');
 
 let aiClient;
 
@@ -44,7 +45,7 @@ function sanitizeBaseName(name) {
 const PROJECT_ROOT = path.resolve(__dirname, '..', '..', '..');
 const AUDIO_DIR = path.join(PROJECT_ROOT, 'runtime', 'audio');
 
-async function synthesize({ text, voiceId, fileBaseName }) {
+async function synthesizeBuffer({ text, voiceId }) {
   const requestedFormat = (process.env.TTS_OUTPUT || 'wav').toLowerCase();
   if (requestedFormat !== 'wav') {
     throw new Error(
@@ -55,19 +56,26 @@ async function synthesize({ text, voiceId, fileBaseName }) {
 
   const ai = getClient();
   const model = process.env.GEMINI_TTS_MODEL || 'gemini-3.1-flash-tts-preview';
+  const textChars = typeof text === 'string' ? text.length : 0;
 
-  const response = await ai.models.generateContent({
-    model,
-    contents: [{ role: 'user', parts: [{ text }] }],
-    config: {
-      responseModalities: ['AUDIO'],
-      speechConfig: {
-        voiceConfig: {
-          prebuiltVoiceConfig: { voiceName: voiceId },
+  const response = await withDependency(
+    'gemini',
+    'tts.synthesize',
+    { model, voiceId, textChars },
+    () =>
+      ai.models.generateContent({
+        model,
+        contents: [{ role: 'user', parts: [{ text }] }],
+        config: {
+          responseModalities: ['AUDIO'],
+          speechConfig: {
+            voiceConfig: {
+              prebuiltVoiceConfig: { voiceName: voiceId },
+            },
+          },
         },
-      },
-    },
-  });
+      })
+  );
 
   const inlineData =
     response?.candidates?.[0]?.content?.parts?.[0]?.inlineData;
@@ -78,13 +86,21 @@ async function synthesize({ text, voiceId, fileBaseName }) {
   const pcmBytes = Buffer.from(inlineData.data, 'base64');
   const wavHeader = buildWavHeader({ dataLength: pcmBytes.length });
   const wavBuffer = Buffer.concat([wavHeader, pcmBytes]);
+  trackEvent(
+    'tts.synthesize',
+    { model, voiceId },
+    { textChars, wavBytes: wavBuffer.length }
+  );
+  return { wavBuffer, text, format: 'wav' };
+}
 
+async function synthesize({ text, voiceId, fileBaseName }) {
+  const { wavBuffer, format } = await synthesizeBuffer({ text, voiceId });
   await fs.promises.mkdir(AUDIO_DIR, { recursive: true });
   const safeName = sanitizeBaseName(fileBaseName);
   const filePath = path.join(AUDIO_DIR, `${safeName}.wav`);
   await fs.promises.writeFile(filePath, wavBuffer);
-
-  return { filePath, text, format: 'wav' };
+  return { filePath, text, format };
 }
 
-module.exports = { synthesize };
+module.exports = { synthesize, synthesizeBuffer };

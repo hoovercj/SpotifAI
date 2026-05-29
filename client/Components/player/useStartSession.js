@@ -1,4 +1,4 @@
-import { useCallback, useRef, useEffect } from "react"
+import { useCallback, useRef } from "react"
 import { useDispatch, useSelector } from "react-redux"
 import { useSpotifyPlayer } from "./useSpotifyPlayer"
 import {
@@ -49,27 +49,36 @@ const POLL_TIMEOUT_MS = 90 * 1000
 
 export function useStartSession() {
   const dispatch = useDispatch()
-  const { playSession } = useSpotifyPlayer()
+  const { playSession, stopCurrentPlayback } = useSpotifyPlayer()
   const loading = useSelector((s) => s.player?.sessionLoading)
 
   const audioRef = useRef(null)
   const abortedRef = useRef(false)
 
-  // If the consumer unmounts mid-orchestration, abort cleanly so we
-  // don't leave the tuning bar spinning forever on whatever page the
-  // user lands on next.
-  useEffect(() => {
-    return () => {
-      abortedRef.current = true
-      stopIntroAudio(audioRef)
-      dispatch(setSessionLoading(null))
-    }
-  }, [dispatch])
+  // NOTE: we deliberately do NOT abort on unmount. A session-start is a
+  // tab-agnostic, app-wide operation: the intro DJ plays through an
+  // <audio> element this hook holds, and the orchestration ends with
+  // playSession() in PlayerProvider (which is always mounted). The
+  // tuning UI lives in NowPlayingBar (AppShell, also always mounted)
+  // and is bound to Redux state, so it clears naturally when
+  // orchestration finishes. Aborting on unmount would cut the DJ off
+  // and prevent Spotify from ever starting whenever the user tapped
+  // a station tile in SearchTab and then switched tabs while the
+  // intro was still playing. Callers who explicitly want to cancel
+  // can use the returned `abort()`.
 
   const start = useCallback(
     async (seed, { tuningOverride = null } = {}) => {
       if (loading) return // one session-start in flight at a time
       abortedRef.current = false
+
+      // Cut any in-progress playback the instant a new session is
+      // committed. Without this, the old session's Spotify tracks and
+      // DJ overlay keep playing while the new intro audio (which
+      // routes through its own <audio> element below) plays on top at
+      // full volume. PlayerProvider.playSession will set up the new
+      // tracks once the intro wraps and tracks are ready.
+      stopCurrentPlayback()
 
       const baseTuning = {
         seed,
@@ -125,11 +134,33 @@ export function useStartSession() {
         // never rejects — we always reach `await introPromise` below.
         let tracksReady = !!payload.tracks
         const introPromise = hasIntro
-          ? playIntroAudio(payload.intro.audioUrl, audioRef).then(() => {
+          ? playIntroAudio(payload.intro.audioUrl, audioRef).then(({ ended }) => {
               if (!abortedRef.current && !tracksReady) {
                 dispatch(
                   setSessionLoading({ ...serverTuning, phase: "loading" })
                 )
+              }
+              // Tell the server "this user has heard the intro for
+              // this (seedKey, djId) combo" so the next start of the
+              // same combo for the same user goes straight to music.
+              // Only fire on a clean `ended` — if the audio bombed
+              // (autoplay rejected, network error) we keep the intro
+              // primed for the next attempt.
+              if (
+                ended &&
+                payload.session?.id &&
+                payload.session?.djId
+              ) {
+                // fire-and-forget; failure here is non-fatal
+                fetch("/api/sessions/intro-played", {
+                  method: "POST",
+                  credentials: "include",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    seedKey: payload.session.id,
+                    djId: payload.session.djId,
+                  }),
+                }).catch(() => {})
               }
             })
           : Promise.resolve()
@@ -216,7 +247,7 @@ export function useStartSession() {
         )
       }
     },
-    [loading, dispatch, playSession]
+    [loading, dispatch, playSession, stopCurrentPlayback]
   )
 
   const abort = useCallback(() => {
@@ -232,24 +263,29 @@ export function useStartSession() {
  * Play a one-shot intro audio file. The returned promise resolves on
  * `ended`, `error`, or a play() rejection (e.g. autoplay blocked). It
  * never rejects — losing the intro should never break the start flow.
+ *
+ * Resolves with `{ ended: boolean }` so the caller can distinguish a
+ * clean end (mark the intro as played) from an error or autoplay
+ * rejection (don't mark it — we want the user to actually hear it
+ * once).
  */
 function playIntroAudio(url, audioRef) {
   return new Promise((resolve) => {
     let settled = false
-    const finish = () => {
+    const finish = (ended) => {
       if (settled) return
       settled = true
-      resolve()
+      resolve({ ended: Boolean(ended) })
     }
     try {
       const audio = new Audio(url)
       audio.preload = "auto"
       audioRef.current = audio
-      audio.addEventListener("ended", finish, { once: true })
-      audio.addEventListener("error", finish, { once: true })
-      audio.play().catch(() => finish())
+      audio.addEventListener("ended", () => finish(true), { once: true })
+      audio.addEventListener("error", () => finish(false), { once: true })
+      audio.play().catch(() => finish(false))
     } catch {
-      finish()
+      finish(false)
     }
   })
 }

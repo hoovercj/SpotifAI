@@ -10,6 +10,7 @@ const SeenArticle = require("./SeenArticle")
 const AIStation = require("./AIStation")
 const RecentSession = require("./RecentSession")
 const UserDjPreference = require("./UserDjPreference")
+const UserIntroPlayed = require("./UserIntroPlayed")
 
 User.hasOne(Profile, {
   foreignKey: "userEmail",
@@ -81,4 +82,5 @@ module.exports = {
   AIStation,
   RecentSession,
   UserDjPreference,
+  UserIntroPlayed,
 }

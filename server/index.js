@@ -1,4 +1,9 @@
 require("dotenv").config()
+// MUST come before any other require so the App Insights SDK can hook
+// outgoing HTTP, console, Postgres, etc. No-ops when the connection
+// string env var is unset (i.e. local dev with no Azure).
+require("./services/telemetry")
+const logger = require("./services/logger")
 const httpServer = require("./app")
 const { syncAndSeed } = require("./db")
 
@@ -12,15 +17,15 @@ const init = async () => {
   // The brief window before sync completes is safe: nothing in the request
   // path uses the DB during the App Service warmup probe, which only
   // checks that the port is listening.
-  httpServer.listen(port, () => console.log(`listening on port ${port}`))
+  httpServer.listen(port, () => logger.info({ port }, "server.listening"))
 
   try {
-    console.log("[startup] running syncAndSeed in background...")
+    logger.info("startup.syncAndSeed.start")
     const t0 = Date.now()
     await syncAndSeed()
-    console.log(`[startup] syncAndSeed complete in ${Date.now() - t0}ms`)
+    logger.info({ ms: Date.now() - t0 }, "startup.syncAndSeed.complete")
   } catch (ex) {
-    console.error("[startup] syncAndSeed failed:", ex)
+    logger.error({ err: ex?.message, stack: ex?.stack }, "startup.syncAndSeed.failed")
   }
 }
 

@@ -51,6 +51,9 @@ const { seedKey } = require("../services/sessions/seedKey")
 const { Settings, UserDjPreference } = require("../db/index.js")
 const recentStore = require("../services/sessions/recentStore")
 const { ensureFreshAccessToken } = require("./utl/ensureFreshAccessToken")
+const { recordIntroPlayed } = require("../services/intros/introPlayedTracker")
+const logger = require("../services/logger")
+const { trackEvent } = require("../services/telemetry")
 
 router.post("/start", async (req, res) => {
   const ok = await ensureFreshAccessToken(req)
@@ -78,7 +81,7 @@ router.post("/start", async (req, res) => {
       const settings = await Settings.findOne({ where: { userEmail: email } })
       exclusiveDjId = settings?.exclusiveDjId ?? null
     } catch (err) {
-      console.warn("session start: exclusive DJ lookup failed:", err?.message || err)
+      logger.warn({ err: err?.message }, "sessions.start.exclusiveDj_lookup_failed")
     }
     try {
       const pref = await UserDjPreference.findOne({
@@ -86,16 +89,18 @@ router.post("/start", async (req, res) => {
       })
       preferredDjId = pref?.djId ?? null
     } catch (err) {
-      console.warn("session start: per-seed pref lookup failed:", err?.message || err)
+      logger.warn({ err: err?.message }, "sessions.start.preferredDj_lookup_failed")
     }
   }
 
+  const t0 = Date.now()
   try {
     const result = await startSession({
       seed,
       spotifyAccessToken: req.session.accessToken,
       exclusiveDjId,
       preferredDjId,
+      userEmail: email,
     })
     // Record in the user's recent-sessions list. Fire-and-forget — a
     // DB hiccup must NOT block the session from playing.
@@ -106,14 +111,25 @@ router.post("/start", async (req, res) => {
           sessionDescriptor: result.session,
         })
         .catch((err) => {
-          console.warn("recentStore.record failed:", err?.message || err)
+          logger.warn({ err: err?.message }, "sessions.start.recentStore_failed")
         })
     }
+    trackEvent(
+      "session.start",
+      {
+        seedType: seed.type,
+        djId: result?.session?.djId || null,
+        ready: result?.ready,
+        introCached: result?.intro?.cached ?? null,
+        introOmitted: result?.intro === null,
+      },
+      { ms: Date.now() - t0 }
+    )
     return res.json(result)
   } catch (err) {
     const status = err?.status || 500
     if (status >= 500) {
-      console.error("Session start failed:", err)
+      logger.error({ err: err?.message, stack: err?.stack, seedType: seed.type }, "sessions.start.failed")
     }
     return res.status(status).json({
       error: "session_start_failed",
@@ -191,6 +207,31 @@ router.delete("/recent/:seedKey", async (req, res) => {
     seedKey: req.params.seedKey,
   })
   return res.json({ removed })
+})
+
+/**
+ * POST /api/sessions/intro-played
+ *   body: { seedKey, djId }
+ *
+ * Marks the DJ intro for (current user, seedKey, djId) as having been
+ * heard, so subsequent /start responses for that combo will omit the
+ * intro and the user goes straight to music. Fire-and-forget from
+ * the client (called on the intro <audio>'s `ended` event). Always
+ * returns 204 — failures are non-fatal and logged on the server.
+ */
+router.post("/intro-played", async (req, res) => {
+  if (!req.session?.accessToken) {
+    return res.status(401).json({ error: "spotify_session_required" })
+  }
+  const userEmail = req.session.email
+  const { seedKey: sKey, djId } = req.body || {}
+  const djIdNum = Number(djId)
+  if (!userEmail || !sKey || typeof sKey !== "string" || !Number.isInteger(djIdNum) || djIdNum <= 0) {
+    return res.status(400).json({ error: "invalid_payload" })
+  }
+  await recordIntroPlayed({ userEmail, seedKey: sKey, djId: djIdNum })
+  trackEvent("intro.played", { seedKey: sKey, djId: djIdNum })
+  return res.status(204).end()
 })
 
 module.exports = router

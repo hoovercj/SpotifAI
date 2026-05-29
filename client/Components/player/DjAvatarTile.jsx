@@ -1,10 +1,12 @@
 import React from "react"
+import { getImageSources } from "@/lib/image"
 
 /**
  * Square DJ avatar tile.
  *
- * - If `dj.details?.image` is a non-empty data URI (the persona has had
- *   `npm run seed:dj-avatars` run for it), render that image.
+ * - If `dj.details?.image` resolves to a renderable URL (the persona
+ *   has had `npm run seed:dj-avatars` run for it), render that image
+ *   via a `<picture>` tag with the webp source + jpg fallback.
  * - Otherwise fall back to a 2-letter initials tile on a gradient
  *   derived from the DJ's id (deterministic, so each DJ gets a stable
  *   color until their avatar is baked).
@@ -71,6 +73,7 @@ export default function DjAvatarTile({
     : "ring-1 ring-border/40"
 
   const img = dj?.details?.image || null
+  const sources = getImageSources(img, "thumb")
   const name = dj?.djName || ""
   const initials = initialsFor(name)
   const gradient = gradientFor(dj?.id)
@@ -80,13 +83,17 @@ export default function DjAvatarTile({
       className={`grid place-items-center overflow-hidden rounded-xl ${sizeCls} ${ringCls} ${className}`}
       aria-label={ariaLabel || name}
     >
-      {img ? (
-        <img
-          src={img}
-          alt=""
-          className="h-full w-full object-cover"
-          loading="lazy"
-        />
+      {sources.jpg || sources.webp ? (
+        <picture>
+          {sources.webp && <source srcSet={sources.webp} type="image/webp" />}
+          <img
+            src={sources.jpg || sources.webp}
+            alt=""
+            className="h-full w-full object-cover"
+            loading="lazy"
+            decoding="async"
+          />
+        </picture>
       ) : (
         <div
           className={`grid h-full w-full place-items-center bg-gradient-to-br ${gradient} font-semibold text-white`}

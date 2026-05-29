@@ -5,6 +5,7 @@
  * which manages history internally per chat instance.
  */
 const { GoogleGenAI } = require('@google/genai');
+const { withDependency, trackEvent } = require('../telemetry');
 
 let aiClient;
 
@@ -38,8 +39,20 @@ async function createChatSession({ systemInstruction, sessionId }) {
   return {
     sessionId,
     async sendMessage(input) {
-      const response = await chat.sendMessage({ message: input });
-      return response.text;
+      const inputChars = typeof input === 'string' ? input.length : 0;
+      const result = await withDependency(
+        'gemini',
+        'llm.invoke',
+        { model, sessionId, inputChars },
+        () => chat.sendMessage({ message: input })
+      );
+      const text = result?.text || '';
+      trackEvent(
+        'llm.invoke',
+        { model, sessionId },
+        { inputChars, outputChars: text.length }
+      );
+      return text;
     },
   };
 }

@@ -48,6 +48,10 @@ const { seedKey } = require("./seedKey")
 const { djCharacters } = require("../djCharacters")
 const { createSessionIntro } = require("./createSessionIntro")
 const { getJobStatus: getStationJobStatus } = require("../aiStations")
+const { hasIntroBeenPlayed } = require("../intros/introPlayedTracker")
+const { hashUserId } = require("../utl/hashUserId")
+const { trackEvent } = require("../telemetry")
+const logger = require("../logger")
 
 // Async generator seed types — these launch a background job because
 // Gemini takes ~5-15s. Playlist is sync because Spotify's playlist API
@@ -134,11 +138,30 @@ function startGenerationJob({ seed, spotifyAccessToken, excludeUris, generator }
 
 /**
  * Build a DJ intro. Errors are non-fatal — a missing intro just means
- * we skip straight to the music.
+ * we skip straight to the music. Suppresses the intro entirely when
+ * the user has already heard it for this (sessionKey, djId) combo.
  */
-async function maybeBuildIntro({ djId, seedType, mode, context, sessionKey, probability }) {
+async function maybeBuildIntro({
+  djId,
+  seedType,
+  mode,
+  context,
+  sessionKey,
+  probability,
+  userEmail,
+}) {
   if (!djId) return null
   if (probability < 1 && Math.random() > probability) return null
+  if (
+    userEmail &&
+    (await hasIntroBeenPlayed({ userEmail, seedKey: sessionKey, djId }))
+  ) {
+    logger.info(
+      { userIdHash: hashUserId(userEmail), sessionKey, djId },
+      'session.intro.suppressed_already_played'
+    )
+    return null
+  }
   try {
     return await createSessionIntro({
       djId,
@@ -148,9 +171,9 @@ async function maybeBuildIntro({ djId, seedType, mode, context, sessionKey, prob
       sessionKey,
     })
   } catch (err) {
-    console.warn(
-      `Session intro generation failed for ${sessionKey} (${seedType}):`,
-      err?.message || err
+    logger.warn(
+      { err: err?.message, sessionKey, seedType, djId },
+      'session.intro.generation_failed'
     )
     return null
   }
@@ -236,6 +259,7 @@ async function startNonStationSession({
   spotifyAccessToken,
   exclusiveDjId,
   preferredDjId,
+  userEmail,
 }) {
   const generator = pickGenerator(seed.type)
   const djId = await resolveSessionDj({
@@ -266,6 +290,7 @@ async function startNonStationSession({
       context: { name: generated.meta.name },
       sessionKey: sessionId,
       probability: 1,
+      userEmail,
     })
     return {
       ready: true,
@@ -310,6 +335,7 @@ async function startNonStationSession({
     },
     sessionKey: sessionId,
     probability: 1,
+    userEmail,
   })
 
   return {
@@ -330,7 +356,7 @@ async function startNonStationSession({
   }
 }
 
-async function startSession({ seed, spotifyAccessToken, exclusiveDjId, preferredDjId }) {
+async function startSession({ seed, spotifyAccessToken, exclusiveDjId, preferredDjId, userEmail }) {
   if (!seed || typeof seed !== "object") {
     const err = new Error("startSession: seed is required")
     err.status = 400
@@ -342,13 +368,14 @@ async function startSession({ seed, spotifyAccessToken, exclusiveDjId, preferred
     // a mismatched DJ would produce whiplash between intros and chatter.
     // Mid-session DJ swaps still work via the Mic2 picker, which only
     // affects /next-content (not intros).
-    return fromStation({ seed, spotifyAccessToken })
+    return fromStation({ seed, spotifyAccessToken, userEmail })
   }
   return startNonStationSession({
     seed,
     spotifyAccessToken,
     exclusiveDjId,
     preferredDjId,
+    userEmail,
   })
 }
 
@@ -396,6 +423,8 @@ async function refillSession({ seed, spotifyAccessToken, excludeUris = [] }) {
     refill: true,
   }
   jobs.set(refillKey, job)
+  trackEvent("session.refill.start", { seedType: seed.type, excludeCount: excludeUris.length })
+  const t0 = Date.now()
   ;(async () => {
     try {
       const { tracks } = await generator({
@@ -409,13 +438,26 @@ async function refillSession({ seed, spotifyAccessToken, excludeUris = [] }) {
         })
       }
       settleJob(refillKey, { status: "ready", tracks })
+      trackEvent(
+        "session.refill.end",
+        { seedType: seed.type, success: true },
+        { ms: Date.now() - t0, tracks: tracks.length }
+      )
     } catch (err) {
-      console.error(`Session refill failed for ${refillKey}:`, err?.message || err)
+      logger.error(
+        { err: err?.message, stack: err?.stack, refillKey, seedType: seed.type },
+        "session.refill.failed"
+      )
       settleJob(refillKey, {
         status: "failed",
         error: err?.message || "Refill failed",
         errorStatus: err?.status || 500,
       })
+      trackEvent(
+        "session.refill.end",
+        { seedType: seed.type, success: false, error: err?.message || "unknown" },
+        { ms: Date.now() - t0 }
+      )
     } finally {
       scheduleJobEviction(refillKey)
     }

@@ -1,6 +1,7 @@
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
+import { VitePWA } from 'vite-plugin-pwa';
 import express from 'express';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -28,6 +29,11 @@ const serveRuntimePlugin = {
 const CLIENT_ENV_KEYS = [
   'SPOTIFY_CLIENT_ID',
   'SPOTIFY_REDIRECT_URI',
+  // App Insights connection string — exposed to the client so the
+  // Insights JS SDK can ingest from the browser. Safe to ship (it's
+  // designed for client-side usage; the connection string is treated
+  // as the ingestion key, not a secret).
+  'VITE_APPINSIGHTS_CONNECTION_STRING',
 ];
 
 // In dev: Vite serves the client on :3000 (matches Spotify OAuth redirect URI),
@@ -50,7 +56,58 @@ export default defineConfig(({ mode }) => {
   processEnvDefines['process.env.NODE_ENV'] = JSON.stringify(mode);
 
   return {
-    plugins: [react(), tailwindcss(), serveRuntimePlugin],
+    plugins: [
+      react(),
+      tailwindcss(),
+      serveRuntimePlugin,
+      VitePWA({
+        // Generate /sw.js with workbox. We register it ourselves in
+        // client/lib/registerSW.js with a "prompt to refresh" UX
+        // instead of skipWaiting — playback shouldn't be cut off
+        // mid-song just because a new build went out.
+        registerType: 'prompt',
+        injectRegister: null,
+        strategies: 'generateSW',
+        manifest: false, // we ship public/manifest.webmanifest directly
+        workbox: {
+          // App shell + JS/CSS chunks. Excludes audio + images because
+          // those are large, mostly user-specific (Spotify CDN tracks)
+          // or already cache-controlled with long max-age.
+          globPatterns: ['**/*.{js,css,html,svg,woff2,webmanifest}'],
+          // Don't precache the favicon at the root either — it's
+          // already in the HTML <link>.
+          globIgnores: ['**/audio/**', '**/images/**', '**/icons/**'],
+          // Don't ever try to intercept the API or the Spotify SDK
+          // script. They must always hit the network.
+          navigateFallback: '/index.html',
+          navigateFallbackDenylist: [
+            /^\/api\//,
+            /^\/audio\//,
+            /^\/socket\.io/,
+            /^\/healthz$/,
+            /^\/readyz$/,
+          ],
+          runtimeCaching: [
+            {
+              // DJ portraits + station covers from /images/. Cache
+              // them client-side after first fetch.
+              urlPattern: /^\/images\/.*\.(?:png|jpe?g|webp)$/,
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'images',
+                expiration: {
+                  maxEntries: 200,
+                  maxAgeSeconds: 60 * 60 * 24 * 90, // 90d
+                },
+              },
+            },
+          ],
+        },
+        devOptions: {
+          enabled: false,
+        },
+      }),
+    ],
     define: processEnvDefines,
     resolve: {
       alias: {

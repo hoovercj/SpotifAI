@@ -28,6 +28,7 @@ router.post("/:genreId/:stationId/start", async (req, res) => {
       genreId: req.params.genreId,
       stationId: req.params.stationId,
       spotifyAccessToken: req.session.accessToken,
+      userEmail: req.session.email,
     })
     return res.json(result)
   } catch (err) {

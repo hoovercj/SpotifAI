@@ -34,6 +34,10 @@ const { AIStation } = require("../../db")
 const { lookupStation } = require("./catalog")
 const { generateStationTracks } = require("./generateStationTracks")
 const { createStationIntro } = require("./createStationIntro")
+const { seedKey } = require("../sessions/seedKey")
+const { hasIntroBeenPlayed } = require("../intros/introPlayedTracker")
+const { hashUserId } = require("../utl/hashUserId")
+const logger = require("../logger")
 
 // Probability of attaching a DJ intro on a warm cache hit. Cold-start always
 // gets one (it doubles as the "tuning" indicator).
@@ -162,10 +166,32 @@ function findJobById(jobId) {
 /**
  * Build a DJ intro with the given probability. Errors are non-fatal —
  * a missing intro just means we'll skip straight to the music.
+ * Suppresses the intro entirely when the user has already heard the
+ * intro for this (station, dj) combo.
  */
-async function maybeBuildIntro({ entry, mode, probability }) {
+async function maybeBuildIntro({ entry, mode, probability, userEmail }) {
   if (!entry?.station?.djId) return null
   if (probability < 1 && Math.random() > probability) return null
+  if (userEmail) {
+    const sKey = seedKey({
+      type: "station",
+      genreId: entry.genre.id,
+      stationId: entry.station.id,
+    })
+    if (
+      await hasIntroBeenPlayed({
+        userEmail,
+        seedKey: sKey,
+        djId: entry.station.djId,
+      })
+    ) {
+      logger.info(
+        { userIdHash: hashUserId(userEmail), seedKey: sKey, djId: entry.station.djId },
+        'station.intro.suppressed_already_played'
+      )
+      return null
+    }
+  }
   try {
     return await createStationIntro({
       djId: entry.station.djId,
@@ -174,9 +200,13 @@ async function maybeBuildIntro({ entry, mode, probability }) {
       mode,
     })
   } catch (err) {
-    console.warn(
-      `AI station intro generation failed for ${entry.genre.id}/${entry.station.id}:`,
-      err?.message || err
+    logger.warn(
+      {
+        err: err?.message,
+        genreId: entry.genre.id,
+        stationId: entry.station.id,
+      },
+      'station.intro.generation_failed'
     )
     return null
   }
@@ -192,7 +222,7 @@ async function maybeBuildIntro({ entry, mode, probability }) {
  *                             swaps tracks into the queue when ready)
  *   - not cached (cold)     : ready=false, jobId, intro (always)
  */
-async function startStation({ genreId, stationId, spotifyAccessToken }) {
+async function startStation({ genreId, stationId, spotifyAccessToken, userEmail }) {
   const entry = lookupStation(genreId, stationId)
   if (!entry) {
     const err = new Error(`Unknown station: ${genreId}/${stationId}`)
@@ -223,6 +253,7 @@ async function startStation({ genreId, stationId, spotifyAccessToken }) {
       entry,
       mode: "warm",
       probability: WARM_INTRO_PROBABILITY,
+      userEmail,
     })
     return {
       ready: true,
@@ -241,7 +272,12 @@ async function startStation({ genreId, stationId, spotifyAccessToken }) {
     spotifyAccessToken,
     kind: "foreground",
   })
-  const intro = await maybeBuildIntro({ entry, mode: "cold", probability: 1 })
+  const intro = await maybeBuildIntro({
+    entry,
+    mode: "cold",
+    probability: 1,
+    userEmail,
+  })
   return {
     ready: false,
     jobId,

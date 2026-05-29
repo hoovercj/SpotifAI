@@ -2,6 +2,7 @@ import React from "react"
 import { useNavigate } from "react-router-dom"
 import STATIONS_BY_GENRE_ID from "./aiStations"
 import { useStationCovers, getStationCover } from "./useStationCovers"
+import { getImageSources } from "@/lib/image"
 
 /**
  * Gradient tile used in Home's browse rows and Search's "Browse all".
@@ -44,9 +45,11 @@ export default function GenreStationTile({ genre, size = "md", onClick }) {
   // the genre's "preview thumbnail". Not all genres have AI stations
   // (and mood tiles never do), so this can legitimately be undefined.
   const firstStation = genre?.id && STATIONS_BY_GENRE_ID[genre.id]?.[0]
-  const previewUrl = firstStation
+  const previewCover = firstStation
     ? getStationCover(covers, { genreId: genre.id, stationId: firstStation.id })
     : null
+  const previewSources = getImageSources(previewCover, "thumb")
+  const hasPreview = previewSources.jpg || previewSources.webp
 
   return (
     <button
@@ -60,23 +63,28 @@ export default function GenreStationTile({ genre, size = "md", onClick }) {
       <span className="absolute left-3 top-3 max-w-[80%] text-base font-semibold leading-tight text-white drop-shadow">
         {genre.name}
       </span>
-      {previewUrl && (
+      {hasPreview && (
         // Tilted DJ/station-cover thumbnail tucked into the bottom-right.
         // Partial overflow comes from the parent `overflow-hidden`, so the
         // thumbnail "peeks" beyond the tile edge — adds depth without
         // crowding the title.
-        <img
-          src={previewUrl}
-          alt=""
-          loading="lazy"
-          decoding="async"
-          onError={(e) => {
-            // Hide silently on 404 — falling back to the bare gradient
-            // is preferable to a broken-image icon.
-            e.currentTarget.style.display = "none"
-          }}
-          className="pointer-events-none absolute -bottom-3 -right-3 h-16 w-16 rotate-[-12deg] rounded-lg object-cover shadow-lg shadow-black/50 ring-1 ring-white/20"
-        />
+        <picture>
+          {previewSources.webp && (
+            <source srcSet={previewSources.webp} type="image/webp" />
+          )}
+          <img
+            src={previewSources.jpg || previewSources.webp}
+            alt=""
+            loading="lazy"
+            decoding="async"
+            onError={(e) => {
+              // Hide silently on 404 — falling back to the bare gradient
+              // is preferable to a broken-image icon.
+              e.currentTarget.style.display = "none"
+            }}
+            className="pointer-events-none absolute -bottom-4 -right-4 h-24 w-24 rotate-[-12deg] rounded-lg object-cover shadow-lg shadow-black/50 ring-1 ring-white/20"
+          />
+        </picture>
       )}
     </button>
   )

@@ -24,6 +24,16 @@ param rejseplanenAccessId string
 @description('Comma-separated list of admin email addresses (seeded on every boot).')
 param adminEmails string
 
+@description('App Insights connection string (passed to both server and client).')
+@secure()
+param appInsightsConnectionString string = ''
+
+@description('Storage account name hosting the intro-audio blob container.')
+param storageAccountName string = ''
+
+@description('Blob container name for cached intro audio.')
+param storageIntrosContainer string = 'audio-intros'
+
 @description('App Service Plan SKU. B1 is the cheapest always-on Linux tier.')
 param skuName string = 'B1'
 
@@ -53,6 +63,13 @@ var optionalSettings = filter([
   { name: 'LOCATION_IQ_API_KEY', value: locationIqApiKey }
   { name: 'REJSEPLANEN_ACCESS_ID', value: rejseplanenAccessId }
   { name: 'ADMIN_EMAILS', value: adminEmails }
+  { name: 'APPLICATIONINSIGHTS_CONNECTION_STRING', value: appInsightsConnectionString }
+  // Also expose to the client bundle. vite.config.mjs forwards
+  // VITE_APPINSIGHTS_CONNECTION_STRING via `define`, so this lands
+  // in the build environment when `azd deploy` runs.
+  { name: 'VITE_APPINSIGHTS_CONNECTION_STRING', value: appInsightsConnectionString }
+  { name: 'AZURE_STORAGE_ACCOUNT', value: storageAccountName }
+  { name: 'AZURE_STORAGE_CONTAINER', value: storageIntrosContainer }
 ], s => !empty(s.value))
 
 var baseSettings = [
@@ -95,6 +112,10 @@ resource site 'Microsoft.Web/sites@2023-12-01' = {
       // Use the package.json `start` script (node server/index.js).
       appCommandLine: 'npm start'
       appSettings: allSettings
+      // App Service ping this path every minute. /healthz always
+      // returns 200; /readyz includes a DB check we'd rather not pay
+      // every minute against Postgres.
+      healthCheckPath: '/healthz'
     }
   }
 }
