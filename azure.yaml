@@ -27,6 +27,26 @@ hooks:
         Write-Host "Provisioning complete. App URL:"
         azd env get-value WEB_URI
         Write-Host ""
+        # Sync the App Insights connection string into the GH secret CI
+        # reads at build time (see .github/workflows/azure-dev.yml). The
+        # value is a Bicep `output`, not a `@secure()` `param`, so
+        # `azd pipeline config` doesn't auto-sync it. Best-effort — if
+        # `gh` isn't installed or the user isn't logged in, the local
+        # provision still succeeds and CI keeps using the previously
+        # synced value. Skipped in CI itself — the value is read from
+        # the existing secret, not re-uploaded.
+        if (-not $Env:GITHUB_ACTIONS -and (Get-Command gh -ErrorAction SilentlyContinue)) {
+          try {
+            $conn = azd env get-value VITE_APPINSIGHTS_CONNECTION_STRING
+            if ($conn) {
+              gh secret set VITE_APPINSIGHTS_CONNECTION_STRING --body $conn
+              Write-Host "Synced VITE_APPINSIGHTS_CONNECTION_STRING GH secret."
+            }
+          } catch {
+            Write-Warning "Could not sync VITE_APPINSIGHTS_CONNECTION_STRING GH secret: $($_.Exception.Message)"
+          }
+        }
+        Write-Host ""
         Write-Host "To bind a custom domain (e.g. radio.codyhoover.com):"
         Write-Host "  1. Add a CNAME to <defaultHostName> + an asuid TXT record in your DNS provider."
         Write-Host "  2. Portal -> this App Service -> Custom domains -> Add custom domain."
@@ -39,6 +59,23 @@ hooks:
         echo ""
         echo "Provisioning complete. App URL:"
         azd env get-value WEB_URI
+        echo ""
+        # Sync the App Insights connection string into the GH secret CI
+        # reads at build time (see .github/workflows/azure-dev.yml). The
+        # value is a Bicep `output`, not a `@secure()` `param`, so
+        # `azd pipeline config` doesn't auto-sync it. Best-effort.
+        # Skipped in CI itself — the value is read from the existing
+        # secret, not re-uploaded.
+        if [ -z "${GITHUB_ACTIONS:-}" ] && command -v gh >/dev/null 2>&1; then
+          conn="$(azd env get-value VITE_APPINSIGHTS_CONNECTION_STRING 2>/dev/null || true)"
+          if [ -n "$conn" ]; then
+            if gh secret set VITE_APPINSIGHTS_CONNECTION_STRING --body "$conn" 2>/dev/null; then
+              echo "Synced VITE_APPINSIGHTS_CONNECTION_STRING GH secret."
+            else
+              echo "WARN: could not sync VITE_APPINSIGHTS_CONNECTION_STRING GH secret."
+            fi
+          fi
+        fi
         echo ""
         echo "To bind a custom domain (e.g. radio.codyhoover.com):"
         echo "  1. Add a CNAME to <defaultHostName> + an asuid TXT record in your DNS provider."

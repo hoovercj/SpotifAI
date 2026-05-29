@@ -72,15 +72,13 @@ jobs:
           # to the already-built bundle the browser downloads.
           SPOTIFY_CLIENT_ID: ${{ secrets.SPOTIFY_CLIENT_ID }}
           SPOTIFY_REDIRECT_URI: ${{ vars.SPOTIFY_REDIRECT_URI }}
+          # App Insights connection string for the browser SDK. Stored as a
+          # GH secret (auto-synced from azd env by the postprovision hook in
+          # azure.yaml) so it gets log-masking in CI output — same pattern
+          # as the other sensitive build-time values.
+          VITE_APPINSIGHTS_CONNECTION_STRING: ${{ secrets.VITE_APPINSIGHTS_CONNECTION_STRING }}
         run: |
           set -euo pipefail
-          # Pull the App Insights connection string from azd env (populated by
-          # the appInsights.bicep module on `azd provision`). Vite will see it
-          # via `process.env.VITE_APPINSIGHTS_CONNECTION_STRING` and bake it
-          # into client/lib/telemetry.js. Without this export the client
-          # bundle ships with an empty string and client-side telemetry
-          # silently no-ops in prod.
-          export VITE_APPINSIGHTS_CONNECTION_STRING="$(azd env get-value VITE_APPINSIGHTS_CONNECTION_STRING)"
           npm ci
           npm run build           # vite -> dist/
           rm -rf release release.zip
