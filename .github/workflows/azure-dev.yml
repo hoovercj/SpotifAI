@@ -74,6 +74,13 @@ jobs:
           SPOTIFY_REDIRECT_URI: ${{ vars.SPOTIFY_REDIRECT_URI }}
         run: |
           set -euo pipefail
+          # Pull the App Insights connection string from azd env (populated by
+          # the appInsights.bicep module on `azd provision`). Vite will see it
+          # via `process.env.VITE_APPINSIGHTS_CONNECTION_STRING` and bake it
+          # into client/lib/telemetry.js. Without this export the client
+          # bundle ships with an empty string and client-side telemetry
+          # silently no-ops in prod.
+          export VITE_APPINSIGHTS_CONNECTION_STRING="$(azd env get-value VITE_APPINSIGHTS_CONNECTION_STRING)"
           npm ci
           npm run build           # vite -> dist/
           rm -rf release release.zip
