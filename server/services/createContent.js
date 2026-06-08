@@ -1,6 +1,5 @@
 const { synthesize } = require('./tts');
 
-const { saveDebugTrackerToFile } = require('./utl/debugTracker');
 const { songPrompts } = require('./utl/promptConstructor');
 const { buildTtsPrompt } = require('./utl/buildTtsPrompt');
 const { djCharacters } = require('./djCharacters');
@@ -30,8 +29,6 @@ async function createContent(
     const { djName, details } = persona;
     const { voiceID, ttsDirection } = details;
 
-    const debugTracker = [];
-
     const input =
       customPrompt ||
       (await songPrompts(
@@ -53,7 +50,6 @@ async function createContent(
       transcript: spokenText,
     });
 
-    saveDebugTrackerToFile(debugTracker);
     const timestamp = Date.now();
     const baseName = `${songName || 'segment'}_${bandName || 'dj'}_${timestamp}`;
     return await synthesize({

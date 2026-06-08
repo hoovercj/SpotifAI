@@ -33,6 +33,16 @@ See [docs/conventions.md](conventions.md#logging) for the per-developer rules. S
 - **URL query strings stripped** before send by a client-side telemetry initializer (`client/lib/telemetry.js`). Path segments like `/jobs/{id}` are collapsed to placeholders so dashboards group cleanly.
 - **User-controllable opt-out**: `localStorage.spotifai_telemetry = "off"`, surfaced as a toggle in the in-app `/privacy` page. When opted-out, `initTelemetry()` returns null and no client events are sent.
 
+## Correlation IDs
+
+| Id | Lifetime | Source | Where it appears |
+|---|---|---|---|
+| `listenSessionId` | per tab (kept across reload via `sessionStorage`) | client mints UUID in [client/lib/listenSession.js](../client/lib/listenSession.js) | every client envelope (page view / ajax / exception / custom event) and every server log line + custom event for `/api/*` requests carrying the `X-Listen-Session-Id` header |
+| `requestId` | per HTTP request | server, honoring upstream `X-Request-Id` or minted in [server/app.js](../server/app.js) | every server log line, every server custom event, response header `X-Request-Id` |
+| `userIdHash` | per user (stable) | HMAC-SHA256 of the lowercased trimmed email with `SESSION_SECRET`, first 16 hex chars — see [server/services/utl/hashUserId.js](../server/services/utl/hashUserId.js) | client App Insights `authUserId` (via `setAuthUser`), server log lines, server custom events |
+
+The `listenSessionId` is the join key for "find every event from one playback session". The server picks it up from the header in [server/app.js](../server/app.js) and threads it through `AsyncLocalStorage`, so any `trackEvent` / `trackException` deep in a service automatically inherits it.
+
 ## Custom events we emit
 
 | Event | Source | Dimensions | Measurements |
@@ -48,6 +58,9 @@ See [docs/conventions.md](conventions.md#logging) for the per-developer rules. S
 | `llm.invoke` | `server/services/llm/gemini.js` | `model`, `sessionId` | `inputChars`, `outputChars` |
 | `tts.synthesize` | `server/services/tts/gemini.js` | `model`, `voiceId` | `textChars`, `wavBytes` |
 | `station.tracks.generated` | `server/services/aiStations/generateStationTracks.js` | `genreId`, `stationId` | `ms`, `candidates`, `resolved` |
+| `feedback.submitted` | `server/routes/feedback.js` (server) + `feedback.submitted.client` from `client/Components/shell/FeedbackDialog.jsx` | `userIdHash`, `listenSessionId`, `requestId`, `path`, `seedKey`, `seedType`, `djId`, `trackUri`, `userAgent`, `contactOk`, `messageLen`, `message` | — |
+
+All events also carry `listenSessionId` automatically (via the client telemetry initializer or the server's `AsyncLocalStorage` context) where one was supplied — see [Correlation IDs](#correlation-ids) above. Client-side exceptions auto-collected from the Spotify Web Playback SDK additionally carry `source` (e.g. `spotify-web-playback`, `playSession`, `session.refill`, `next-content`, `playDjAudio`, `mediaSession.nextTrack`, …), and where applicable `errorType`, `status`, `seedKey`, `seedType`, `trackUri`, `djId` — see [client/Components/player/PlayerProvider.jsx](../client/Components/player/PlayerProvider.jsx).
 
 Plus dependency events (auto-pulled from `withDependency`):
 
@@ -129,6 +142,40 @@ customEvents
 | summarize logins=count() by tostring(customDimensions.userIdHash)
 | where logins >= 5
 | order by logins desc
+```
+
+### Investigate a user-reported issue
+
+Feedback rows carry the `listenSessionId` for the tab the user was on when they hit "Report an issue", so pivoting from a single feedback event into the full trace is one query:
+
+```kql
+let target = "<listenSessionId-from-feedback.submitted-event>";
+union customEvents, requests, exceptions, dependencies, traces
+| where timestamp > ago(24h)
+| where customDimensions.listenSessionId == target
+| project timestamp, itemType, name, resultCode = coalesce(resultCode, ""), duration = coalesce(duration, 0.0), customDimensions
+| order by timestamp asc
+```
+
+Recent feedback list:
+
+```kql
+customEvents
+| where timestamp > ago(7d) and name == "feedback.submitted"
+| project timestamp, customDimensions.userIdHash, customDimensions.listenSessionId, customDimensions.seedType, customDimensions.djId, customDimensions.path, customDimensions.message
+| order by timestamp desc
+```
+
+### Spotify Web Playback SDK errors
+
+The client now reports SDK failures as `exceptions` with `customDimensions.source` set to one of `spotify-web-playback`, `playSession`, `playTracks`, `playContext`, `playDjAudio`, `addToQueue`, `session.refill*`, `next-content`, `mediaSession.*`. Triage:
+
+```kql
+exceptions
+| where timestamp > ago(24h)
+| where customDimensions.source startswith "spotify" or customDimensions.source startswith "playSession" or customDimensions.source startswith "session.refill" or customDimensions.source startswith "playDjAudio" or customDimensions.source startswith "mediaSession"
+| summarize n=count() by tostring(customDimensions.source), tostring(customDimensions.errorType), outerMessage
+| order by n desc
 ```
 
 ## Local debugging

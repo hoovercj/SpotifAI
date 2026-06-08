@@ -103,16 +103,29 @@ async function list({ userEmail, limit = DEFAULT_LIMIT }) {
 
 // Best-effort: re-derive the current cover URL for a station seed.
 // Returns null for non-station seeds or when anything goes wrong.
+// `resolveStationCover` returns an image descriptor object — flatten
+// it to a single URL string here because `imageUrl` is contractually
+// a string on the wire (the client renders it directly as <img src>).
 function freshStationCover(seed) {
   if (!seed || seed.type !== "station") return null
   try {
     const entry = lookupStation(seed.genreId, seed.stationId)
     if (!entry?.station) return null
-    return resolveStationCover({
+    const desc = resolveStationCover({
       genreId: seed.genreId,
       stationId: seed.stationId,
       djId: entry.station.djId,
     })
+    if (!desc) return null
+    if (typeof desc === "string") return desc
+    return (
+      desc.thumb?.jpg ||
+      desc.thumb?.webp ||
+      desc.full?.jpg ||
+      desc.full?.webp ||
+      desc.src ||
+      null
+    )
   } catch {
     return null
   }

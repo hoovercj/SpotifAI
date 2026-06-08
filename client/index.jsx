@@ -7,7 +7,13 @@ import { Provider } from "react-redux"
 import store from "./store"
 import { BrowserRouter } from "react-router-dom"
 import { initTelemetry } from "./lib/telemetry"
+import { installApiClientHeaders } from "./lib/apiClient"
 import { registerServiceWorker } from "./lib/registerSW"
+
+// Install the X-Listen-Session-Id header on axios + fetch before
+// anything else so the telemetry SDK's first auto-collected ajax call
+// carries it too.
+installApiClientHeaders()
 
 // Bootstrap App Insights as early as possible so initial page view +
 // autocollected ajax events all flow up. No-ops when the connection

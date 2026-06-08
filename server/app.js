@@ -20,6 +20,9 @@ const io = new Server(httpServer, { cors: { origin: "*" } });
 const path = require("path");
 const logger = require("./services/logger");
 const pinoHttp = require("pino-http");
+const { runWithContext } = require("./services/telemetry");
+const { hashUserId } = require("./services/utl/hashUserId");
+const { isValidListenSessionId } = require("../shared/listenSession.mjs");
 
 // Per-request UUID stamped onto every log line + every App Insights
 // correlation. Honor an upstream X-Request-Id (so a load balancer or
@@ -33,13 +36,40 @@ app.use((req, res, next) => {
       ? headerId
       : crypto.randomUUID();
   res.setHeader("X-Request-Id", req.requestId);
+
+  // Per-tab listen-session id from the client. Strict UUID v4 — see
+  // shared/listenSession.js. Anything else is dropped so we can't be
+  // tricked into stamping arbitrary attacker-controlled strings onto
+  // log lines.
+  const rawListen = req.headers["x-listen-session-id"];
+  if (isValidListenSessionId(rawListen)) {
+    req.listenSessionId = rawListen;
+  }
+
   next();
+});
+
+// Wrap the rest of the request in an AsyncLocalStorage context so any
+// trackEvent/trackException call deep inside services automatically
+// picks up requestId / listenSessionId / userIdHash without prop
+// threading. Updated lazily once req.session.email is available.
+app.use((req, res, next) => {
+  runWithContext(
+    {
+      requestId: req.requestId,
+      listenSessionId: req.listenSessionId,
+    },
+    () => next()
+  );
 });
 
 app.use(
   pinoHttp({
     logger,
-    customProps: (req) => ({ requestId: req.requestId }),
+    customProps: (req) => ({
+      requestId: req.requestId,
+      listenSessionId: req.listenSessionId,
+    }),
     // Spotify auth headers + cookies are noise. Don't log them.
     redact: {
       paths: [
@@ -107,6 +137,21 @@ app.use(
     },
   })
 );
+
+// Enrich the ALS telemetry context with the hashed user id now that
+// the session middleware has populated req.session.email. We mutate
+// the existing store rather than re-running runWithContext so the
+// downstream handlers stay on the same async chain.
+const { getContext } = require("./services/telemetry");
+app.use((req, _res, next) => {
+  if (req.session?.email) {
+    const ctx = getContext();
+    if (ctx && typeof ctx === "object") {
+      ctx.userIdHash = hashUserId(req.session.email);
+    }
+  }
+  next();
+});
 
 app.use("/api", require("./routes"));
 

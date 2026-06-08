@@ -23,8 +23,17 @@
  */
 
 import { ApplicationInsights } from "@microsoft/applicationinsights-web"
+import { getListenSessionId } from "./listenSession"
 
 const OPT_OUT_KEY = "spotifai_telemetry"
+
+// Vite injects `process.env.NODE_ENV` at build time via vite.config.mjs
+// (see processEnvDefines), so this resolves to the literal string at
+// bundle time — "production" in prod builds, "development" in dev.
+// Used as the `environment` dimension on every envelope so a single
+// dashboard can filter prod traffic out from local dogfooding.
+const ENVIRONMENT =
+  (typeof process !== "undefined" && process.env?.NODE_ENV) || "unknown"
 
 let appInsights = null
 
@@ -104,6 +113,16 @@ function attachTelemetryInitializers(ai) {
     if (data.properties?.refUri) {
       data.properties.refUri = scrubUrl(data.properties.refUri)
     }
+    // Stamp the per-tab listen-session id on every envelope so a
+    // single Kusto query can join page views, ajax, exceptions, and
+    // custom events for one playback session.
+    data.properties = data.properties || {}
+    if (!data.properties.listenSessionId) {
+      data.properties.listenSessionId = getListenSessionId()
+    }
+    if (!data.properties.environment) {
+      data.properties.environment = ENVIRONMENT
+    }
   })
 }
 
@@ -176,7 +195,11 @@ export function clearAuthUser() {
 export function track(name, properties = {}, measurements = undefined) {
   if (!appInsights) return
   try {
-    appInsights.trackEvent({ name, properties, measurements })
+    appInsights.trackEvent({
+      name,
+      properties: { listenSessionId: getListenSessionId(), ...properties },
+      measurements,
+    })
   } catch {
     /* never throw from telemetry */
   }
@@ -187,7 +210,7 @@ export function trackException(error, properties = {}) {
   try {
     appInsights.trackException({
       exception: error instanceof Error ? error : new Error(String(error)),
-      properties,
+      properties: { listenSessionId: getListenSessionId(), ...properties },
     })
   } catch {
     /* noop */

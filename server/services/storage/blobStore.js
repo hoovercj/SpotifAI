@@ -75,12 +75,25 @@ class LocalDiskBlobAdapter {
 class AzureBlobAdapter {
   constructor(account, container) {
     const { BlobServiceClient } = require('@azure/storage-blob')
-    const { DefaultAzureCredential } = require('@azure/identity')
+    const {
+      DefaultAzureCredential,
+      ManagedIdentityCredential,
+    } = require('@azure/identity')
     this.account = account
     this.container = container
+    // In App Service we know managed identity is available, so we use
+    // it directly. DefaultAzureCredential would otherwise walk a chain
+    // (EnvironmentCredential → WorkloadIdentityCredential → …) and
+    // record a CredentialUnavailableError exception in App Insights
+    // for every failing link before finally succeeding on MI. Locally
+    // we fall back to DefaultAzureCredential so `az login` keeps
+    // working for the developer.
+    const credential = process.env.WEBSITE_INSTANCE_ID
+      ? new ManagedIdentityCredential()
+      : new DefaultAzureCredential()
     this.serviceClient = new BlobServiceClient(
       `https://${account}.blob.core.windows.net`,
-      new DefaultAzureCredential()
+      credential
     )
     this.containerClient = this.serviceClient.getContainerClient(container)
   }

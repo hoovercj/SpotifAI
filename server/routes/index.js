@@ -6,6 +6,7 @@ router.use("/profile", require("./profile"))
 router.use("/content", require("./content"))
 router.use("/stations", require("./stations"))
 router.use("/sessions", require("./sessions"))
+router.use("/feedback", require("./feedback"))
 
 // Dev-only: human-pick UI for the station-cover photo-discovery flow.
 // Reads candidates from `debug/station-cover-candidates/` and writes

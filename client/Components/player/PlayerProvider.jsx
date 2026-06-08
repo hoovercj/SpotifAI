@@ -26,6 +26,7 @@ import {
 } from "../../store/playerSlice"
 import { setCurrentDj as setStoreCurrentDj } from "../../store/djsSlice"
 import { showProfile } from "../../store/userSlice"
+import { track, trackException } from "../../lib/telemetry"
 
 const PlayerContext = createContext(null)
 
@@ -227,6 +228,7 @@ export function PlayerProvider({ children }) {
     djAudioTimeoutRef.current = window.setTimeout(() => {
       audioRef.current?.play().catch((err) => {
         console.warn("DJ audio play() rejected:", err)
+        trackException(err, { source: "dj-audio.play" })
       })
     }, djTimeOut)
   }, [])
@@ -283,6 +285,12 @@ export function PlayerProvider({ children }) {
             dataUri = await axios.post("/api/content/next-content", payload)
           } catch (err) {
             console.warn("next-content failed; falling back to generic segue:", err)
+            trackException(err, {
+              source: "next-content",
+              djId: currentDjRef.current?.id ?? null,
+              seedKey: currentSessionRef.current?.id ?? null,
+              status: err?.response?.status ?? null,
+            })
           }
         }
 
@@ -326,11 +334,26 @@ export function PlayerProvider({ children }) {
       await resolved?.setName?.("SpotifAI Radio")
     } catch (err) {
       console.warn("Failed to set device name:", err)
+      trackException(err, { source: "spotify-sdk.setName" })
     }
   }, [])
 
   const spotifyEventHandler = useCallback(
     async (state) => {
+      // SDK error surface — fired for initialization / authentication /
+      // account / playback / generic player failures. Without this the
+      // SDK silently stalls and App Insights sees nothing client-side.
+      if (state?.status === "ERROR" || state?.errorType) {
+        trackException(new Error(state?.error || "spotify_sdk_error"), {
+          source: "spotify-web-playback",
+          errorType: state?.errorType ?? null,
+          status: state?.status ?? null,
+          eventType: state?.type ?? null,
+          deviceId: state?.currentDeviceId ?? null,
+          trackUri: state?.track?.uri ?? null,
+        })
+      }
+
       if (state?.isPlaying !== undefined) {
         dispatch(setIsPlaying(state.isPlaying))
       }
@@ -460,6 +483,7 @@ export function PlayerProvider({ children }) {
         await spotifyApiRef.current.play({ uris })
       } catch (err) {
         console.warn("playTracks failed:", err)
+        trackException(err, { source: "playTracks", uriCount: uris.length })
       }
     },
     [ensureToken, dispatch]
@@ -490,6 +514,7 @@ export function PlayerProvider({ children }) {
         await spotifyApiRef.current.play({ context_uri: context.uri })
       } catch (err) {
         console.warn("playContext failed:", err)
+        trackException(err, { source: "playContext", contextUri: context.uri })
       }
     },
     [ensureToken, dispatch]
@@ -502,6 +527,7 @@ export function PlayerProvider({ children }) {
         await spotifyApiRef.current.addToQueue(uri)
       } catch (err) {
         console.warn("addToQueue failed:", err)
+        trackException(err, { source: "addToQueue", uri })
       }
     },
     [ensureToken]
@@ -582,6 +608,12 @@ export function PlayerProvider({ children }) {
         await spotifyApiRef.current.play({ uris })
       } catch (err) {
         console.warn("playSession failed:", err)
+        trackException(err, {
+          source: "playSession",
+          seedType: session.seed?.type ?? null,
+          seedKey: session.id,
+          uriCount: uris.length,
+        })
       }
     },
     [ensureToken, dispatch]
@@ -622,6 +654,7 @@ export function PlayerProvider({ children }) {
       await spotifyApiRef.current.play({ uris })
     } catch (err) {
       console.warn("shuffleCurrentSession failed:", err)
+      trackException(err, { source: "shuffleCurrentSession", seedKey: session.id })
     }
   }, [ensureToken, dispatch])
 
@@ -680,6 +713,7 @@ export function PlayerProvider({ children }) {
             successfullyQueued.push(uri)
           } catch (err) {
             console.warn("session loop addToQueue failed:", err)
+            trackException(err, { source: "sessionLoop.addToQueue", uri, seedKey: session.id })
             break
           }
         }
@@ -715,6 +749,12 @@ export function PlayerProvider({ children }) {
         })
         if (!res.ok) {
           console.warn("session refill request failed:", res.status)
+          trackException(new Error(`refill_request_${res.status}`), {
+            source: "session.refill.request",
+            status: res.status,
+            seedKey: session.id,
+            seedType: seedType ?? null,
+          })
           return
         }
         const { jobId } = await res.json()
@@ -752,6 +792,11 @@ export function PlayerProvider({ children }) {
           }
           if (status.error) {
             console.warn("session refill job failed:", status.error)
+            trackException(new Error(String(status.error)), {
+              source: "session.refill.job",
+              seedKey: session.id,
+              seedType: seedType ?? null,
+            })
             return
           }
         }
@@ -773,6 +818,7 @@ export function PlayerProvider({ children }) {
             queued.push(uri)
           } catch (err) {
             console.warn("refill addToQueue failed:", err)
+            trackException(err, { source: "refill.addToQueue", uri, seedKey: session.id })
             break
           }
         }
@@ -781,6 +827,11 @@ export function PlayerProvider({ children }) {
         }
       } catch (err) {
         console.warn("session refill failed:", err)
+        trackException(err, {
+          source: "session.refill",
+          seedKey: session.id,
+          seedType: seedType ?? null,
+        })
       } finally {
         refillInFlightRef.current = false
       }
@@ -858,6 +909,7 @@ export function PlayerProvider({ children }) {
       await audio.play()
     } catch (err) {
       console.warn("playDjAudio failed:", err)
+      trackException(err, { source: "playDjAudio" })
     }
   }, [])
 
@@ -867,7 +919,10 @@ export function PlayerProvider({ children }) {
     if (!deviceId || !accessToken) return
     spotifyApiHelpers
       .setDevice(accessToken, deviceId, false)
-      .catch((err) => console.warn("setDevice failed:", err))
+      .catch((err) => {
+        console.warn("setDevice failed:", err)
+        trackException(err, { source: "spotify-sdk.setDevice", deviceId })
+      })
   }, [deviceId, accessToken])
 
   // ── Media Session integration ─────────────────────────────────────────
@@ -909,13 +964,13 @@ export function PlayerProvider({ children }) {
   useEffect(() => {
     if (typeof navigator === "undefined" || !navigator.mediaSession) return
     const handlers = {
-      play: () => { try { playerRef.current?.player?.resume() } catch (_) {} },
-      pause: () => { try { playerRef.current?.player?.pause() } catch (_) {} },
-      previoustrack: () => { try { playerRef.current?.player?.previousTrack() } catch (_) {} },
-      nexttrack: () => { try { playerRef.current?.player?.nextTrack() } catch (_) {} },
+      play: () => { try { playerRef.current?.player?.resume() } catch (err) { trackException(err, { source: "mediaSession.play" }) } },
+      pause: () => { try { playerRef.current?.player?.pause() } catch (err) { trackException(err, { source: "mediaSession.pause" }) } },
+      previoustrack: () => { try { playerRef.current?.player?.previousTrack() } catch (err) { trackException(err, { source: "mediaSession.previousTrack" }) } },
+      nexttrack: () => { try { playerRef.current?.player?.nextTrack() } catch (err) { trackException(err, { source: "mediaSession.nextTrack" }) } },
       seekto: (details) => {
         const pos = Math.max(0, Math.floor((details?.seekTime || 0) * 1000))
-        try { playerRef.current?.player?.seek(pos) } catch (_) {}
+        try { playerRef.current?.player?.seek(pos) } catch (err) { trackException(err, { source: "mediaSession.seek" }) }
       },
     }
     for (const [action, handler] of Object.entries(handlers)) {
