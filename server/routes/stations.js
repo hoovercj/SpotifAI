@@ -5,6 +5,7 @@ const {
   resolveAllStationCovers,
 } = require("../services/aiStations")
 const { ensureFreshAccessToken } = require("./utl/ensureFreshAccessToken")
+const logger = require("../services/logger")
 
 /**
  * POST /api/stations/:genreId/:stationId/start
@@ -34,7 +35,7 @@ router.post("/:genreId/:stationId/start", async (req, res) => {
   } catch (err) {
     const status = err?.status || 500
     if (status >= 500) {
-      console.error("AI station start failed:", err)
+      logger.error({ err: err?.message, stack: err?.stack, genreId: req.params.genreId, stationId: req.params.stationId }, 'stations.start.failed')
     }
     return res.status(status).json({
       error: "station_start_failed",
@@ -83,7 +84,7 @@ router.get("/covers", (_req, res) => {
   try {
     return res.json({ covers: resolveAllStationCovers() })
   } catch (err) {
-    console.error("Failed to resolve station covers:", err)
+    logger.error({ err: err?.message, stack: err?.stack }, 'stations.covers.failed')
     return res.status(500).json({ error: "station_covers_failed" })
   }
 })

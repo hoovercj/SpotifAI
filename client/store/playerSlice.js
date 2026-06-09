@@ -66,6 +66,12 @@ const initialState = {
   // UI: whether the full-screen Now Playing drawer is open
   nowPlayingOpen: false,
 
+  // Repeat mode mirrored from / pushed to Spotify's player. Cycles
+  // 'off' → 'context' (loop whole queue) → 'track' (loop current).
+  // Surfaced on playlist sessions in NowPlayingScreen; for our other
+  // seed types the natural refill loop already gives infinite play.
+  repeatMode: "off",
+
   // UI hand-off: when the DJ Action Bar's left avatar is tapped we want
   // NowPlayingScreen to open AND auto-expand the DJ picker. Set true by
   // requestDjPicker(); NowPlayingScreen consumes + clears it on render.
@@ -250,6 +256,12 @@ const playerSlice = createSlice({
     setNowPlayingOpen: (state, action) => {
       state.nowPlayingOpen = Boolean(action.payload)
     },
+    setRepeatMode: (state, action) => {
+      const next = action.payload
+      if (next === "off" || next === "context" || next === "track") {
+        state.repeatMode = next
+      }
+    },
     // Open NowPlaying AND ask it to expand the DJ picker on next render.
     // Used by the DJ Action Bar avatar tap.
     requestDjPicker: (state) => {
@@ -306,6 +318,7 @@ export const {
   openNowPlaying,
   closeNowPlaying,
   setNowPlayingOpen,
+  setRepeatMode,
   requestDjPicker,
   clearDjPickerRequest,
   setPlayerLoading,

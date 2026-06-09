@@ -3,6 +3,7 @@ const { synthesize } = require('./tts');
 const { songPrompts } = require('./utl/promptConstructor');
 const { buildTtsPrompt } = require('./utl/buildTtsPrompt');
 const { djCharacters } = require('./djCharacters');
+const logger = require('./logger');
 
 /**
  * Generates spoken-word audio for a single rundown slot.
@@ -26,7 +27,7 @@ async function createContent(
 ) {
   try {
     const persona = await djCharacters(djId);
-    const { djName, details } = persona;
+    const { djName, slug, details } = persona;
     const { voiceID, ttsDirection } = details;
 
     const input =
@@ -56,9 +57,10 @@ async function createContent(
       text: ttsInput,
       voiceId: voiceID,
       fileBaseName: baseName,
+      personaSlug: slug,
     });
   } catch (error) {
-    console.log(error);
+    logger.error({ err: error?.message, stack: error?.stack, djId, songName, bandName }, 'createContent.failed');
   }
 }
 

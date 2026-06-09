@@ -1,4 +1,5 @@
 const fs = require("fs");
+const logger = require("../logger");
 
 const MIME_TYPES = {
   png: "image/png",
@@ -18,7 +19,7 @@ async function convertFileToDataURI(filePath, fileType) {
     const dataURI = `data:${mimeType};base64,${base64Data}`;
     return dataURI;
   } catch (error) {
-    console.error("Error:", error.message);
+    logger.error({ err: error?.message, stack: error?.stack }, 'convertMP3FileToDataURI.failed');
   }
 }
 

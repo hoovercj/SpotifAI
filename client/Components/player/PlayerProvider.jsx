@@ -12,6 +12,7 @@ import SpotifyWebApi from "spotify-web-api-node"
 import axios from "axios"
 import {
   setCurrentTrack,
+  clearCurrentTrack,
   setIsPlaying,
   setPosition,
   setDuration,
@@ -23,6 +24,8 @@ import {
   recordSessionQueueAdditions,
   appendSessionTracksIfMatch,
   clearPendingRehydrateDjId,
+  setRepeatMode,
+  closeNowPlaying,
 } from "../../store/playerSlice"
 import { setCurrentDj as setStoreCurrentDj } from "../../store/djsSlice"
 import { showProfile } from "../../store/userSlice"
@@ -39,9 +42,27 @@ export function usePlayer() {
 }
 
 // Constants — preserved verbatim from the original Radio.jsx tuning.
-const MAX_VOICEOVER_DURATION = 20000
 const SPOTIFY_VOL_ATTENUATION = 0.5
 const DEFAULT_INITIAL_VOLUME = 0.7
+
+// Talk-bridge tuning. When DJ chatter is longer than the combined
+// outro+intro window we engage a smoother three-phase handoff:
+//
+//   1. DJ starts at T - OUTRO_MS of the outgoing song.
+//   2. Music fades 1.0 → 0 over OUTRO_MS so song A ends quietly under
+//      the DJ's opening line.
+//   3. Song A ends naturally → Spotify auto-skips to song B which we
+//      immediately pause. DJ talks over pure silence in the middle.
+//   4. With INTRO_MS of DJ left, song B resumes and music fades 0 → 1.0
+//      back to full volume.
+//
+// Shorter DJ clips (≤ OUTRO_MS + INTRO_MS) keep the simple
+// duck-and-overlap behavior — no pause, no fade, just the
+// SPOTIFY_VOL_ATTENUATION ducking on the play handler.
+const TALK_BRIDGE_OUTRO_MS = 6000
+const TALK_BRIDGE_INTRO_MS = 6000
+const TALK_BRIDGE_THRESHOLD_MS = TALK_BRIDGE_OUTRO_MS + TALK_BRIDGE_INTRO_MS
+const TALK_BRIDGE_FADE_STEP_MS = 60
 
 // Tiny promise-based sleep — used by the session refill polling loop.
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
@@ -107,6 +128,15 @@ export function PlayerProvider({ children }) {
   const needNextDjAudioRef = useRef(true)
   const isSpotifyPlayingRef = useRef(false)
 
+  // Talk-bridge mode flag + fade interval handle. `talkBridgeRef`
+  // tracks whether the current DJ break engaged the long-chatter
+  // flow (set in scheduleDjAudio, cleared on DJ end / session
+  // change / hard stop). `fadeIntervalRef` holds the active music
+  // volume tween so any new scheduling tears down the old one
+  // before kicking off a fresh fade.
+  const talkBridgeRef = useRef(false)
+  const fadeIntervalRef = useRef(null)
+
   const spotifyApiRef = useRef(new SpotifyWebApi())
 
   // Refill / shuffle guards — both consumed by the queue-refill effect
@@ -159,24 +189,22 @@ export function PlayerProvider({ children }) {
   }, [pendingRehydrateDjId, allDjs, currentDj, dispatch])
   useEffect(() => {
     volumeRef.current = volume
-    // Apply live volume changes to the underlying SDK + DJ overlay.
+    // Music slider controls Spotify only. The DJ overlay has its own
+    // independent slider (djVolume) — touching the music slider must
+    // not change how loud the DJ sounds.
     if (isMutedRef.current) return
-    if (audioRef.current && !audioRef.current.paused) {
-      audioRef.current.volume = volume * djVolumeRef.current
-      playerRef.current?.player?.setVolume(volume * SPOTIFY_VOL_ATTENUATION)
-    } else {
-      if (audioRef.current) audioRef.current.volume = volume * djVolumeRef.current
-      playerRef.current?.player?.setVolume(volume)
-    }
+    const ducking = audioRef.current && !audioRef.current.paused
+    playerRef.current?.player?.setVolume(
+      ducking ? volume * SPOTIFY_VOL_ATTENUATION : volume
+    )
   }, [volume])
-  // Independent DJ-overlay volume. Applied on top of the master volume
-  // so a user who wants the DJ quieter than the music can dial it down
-  // without touching the music level. Master mute still wins.
+  // Independent DJ-overlay volume — sole control of the DJ audio
+  // element's loudness. Master mute still wins.
   useEffect(() => {
     djVolumeRef.current = djVolume
     if (isMutedRef.current) return
     if (audioRef.current) {
-      audioRef.current.volume = volumeRef.current * djVolume
+      audioRef.current.volume = djVolume
     }
   }, [djVolume])
   useEffect(() => {
@@ -185,17 +213,50 @@ export function PlayerProvider({ children }) {
       if (audioRef.current) audioRef.current.volume = 0
       playerRef.current?.player?.setVolume(0)
     } else {
-      const v = volumeRef.current
-      if (audioRef.current) audioRef.current.volume = v * djVolumeRef.current
+      if (audioRef.current) audioRef.current.volume = djVolumeRef.current
+      const ducking = audioRef.current && !audioRef.current.paused
       playerRef.current?.player?.setVolume(
-        audioRef.current && !audioRef.current.paused
-          ? v * SPOTIFY_VOL_ATTENUATION
-          : v
+        ducking
+          ? volumeRef.current * SPOTIFY_VOL_ATTENUATION
+          : volumeRef.current
       )
     }
   }, [isMuted])
 
   // ── Stable callbacks (use refs to avoid stale closures) ────────────────
+
+  // Linear fade of the Spotify player volume between two ratios of
+  // the user's master volume. `fromRatio`/`toRatio` are in [0,1]
+  // where 1 = current master volume. Honors mute (no-op) and clears
+  // any in-flight fade so callers don't need to remember to do it
+  // themselves. Steps are spaced at TALK_BRIDGE_FADE_STEP_MS so a
+  // 6s fade is ~100 setVolume calls — well under Spotify Web
+  // Playback's rate ceiling.
+  const fadeMusicVolume = useCallback((fromRatio, toRatio, durationMs) => {
+    window.clearInterval(fadeIntervalRef.current)
+    fadeIntervalRef.current = null
+    if (isMutedRef.current) return
+    const player = playerRef.current?.player
+    if (!player) return
+    const master = volumeRef.current
+    const steps = Math.max(1, Math.floor(durationMs / TALK_BRIDGE_FADE_STEP_MS))
+    let i = 0
+    // Set the starting volume synchronously so the fade has a clean
+    // anchor — without this the first tween step could "snap" from
+    // whatever ducked value Spotify happened to be at.
+    player.setVolume(master * fromRatio)
+    fadeIntervalRef.current = window.setInterval(() => {
+      i++
+      const t = Math.min(1, i / steps)
+      const ratio = fromRatio + (toRatio - fromRatio) * t
+      playerRef.current?.player?.setVolume(volumeRef.current * ratio)
+      if (i >= steps) {
+        window.clearInterval(fadeIntervalRef.current)
+        fadeIntervalRef.current = null
+      }
+    }, TALK_BRIDGE_FADE_STEP_MS)
+  }, [])
+
   const scheduleDjAudio = useCallback(async (state = null) => {
     if (djAudioPendingRef.current) return
     let duration
@@ -214,16 +275,33 @@ export function PlayerProvider({ children }) {
     if (!duration || !audioRef.current?.duration) return
 
     const audioDurationMs = audioRef.current.duration * 1000
+    const seedTypeForEvent = currentSessionRef.current?.seed?.type ?? null
     let djTimeOut
-    if (audioDurationMs > MAX_VOICEOVER_DURATION) {
+    if (audioDurationMs > TALK_BRIDGE_THRESHOLD_MS) {
+      // Talk-bridge: DJ overlaps last OUTRO_MS of song A, then talks
+      // over silence, then song B fades in under the final INTRO_MS.
+      talkBridgeRef.current = true
       delayNextTrackRef.current = true
-      djTimeOut = duration - progress - MAX_VOICEOVER_DURATION / 2
+      djTimeOut = duration - progress - TALK_BRIDGE_OUTRO_MS
+      // Resume song B (which we'll have paused on auto-advance) when
+      // there are INTRO_MS of DJ chatter left, then fade music in.
       delayNextTrackTimeoutRef.current = window.setTimeout(() => {
         playerRef.current?.player?.resume()
-      }, djTimeOut + audioDurationMs - MAX_VOICEOVER_DURATION / 2)
+        fadeMusicVolume(0, 1, TALK_BRIDGE_INTRO_MS)
+      }, djTimeOut + audioDurationMs - TALK_BRIDGE_INTRO_MS)
     } else {
+      talkBridgeRef.current = false
       djTimeOut = duration - progress - audioDurationMs / 2
     }
+
+    track("dj.break.scheduled", {
+      mode: talkBridgeRef.current ? "bridge" : "duck",
+      audioDurationMs: Math.round(audioDurationMs),
+      djId: currentDjRef.current?.id ?? null,
+      personaSlug: currentDjRef.current?.details?.slug ?? null,
+      seedType: seedTypeForEvent,
+      seedKey: currentSessionRef.current?.id ?? null,
+    })
 
     djAudioTimeoutRef.current = window.setTimeout(() => {
       audioRef.current?.play().catch((err) => {
@@ -231,7 +309,7 @@ export function PlayerProvider({ children }) {
         trackException(err, { source: "dj-audio.play" })
       })
     }, djTimeOut)
-  }, [])
+  }, [fadeMusicVolume])
 
   const prepareNextDjAudio = useCallback(async () => {
     if (
@@ -418,12 +496,21 @@ export function PlayerProvider({ children }) {
   // ── Mount the DJ audio element ─────────────────────────────────────────
   useEffect(() => {
     const audio = new Audio()
-    audio.volume = volumeRef.current * djVolumeRef.current
+    audio.volume = djVolumeRef.current
     audioRef.current = audio
 
     const onPlay = () => {
       dispatch(setDjSpeaking(true))
-      if (!isMutedRef.current) {
+      if (isMutedRef.current) return
+      if (talkBridgeRef.current) {
+        // Long-chatter mode: fade music from full to silent over
+        // OUTRO_MS so song A trails off under the DJ's opening line.
+        // The `track_update` handler will pause Spotify when song A
+        // ends, and the scheduled resume-with-fade-in (queued in
+        // `scheduleDjAudio`) brings song B back up at the end.
+        fadeMusicVolume(1, 0, TALK_BRIDGE_OUTRO_MS)
+      } else {
+        // Short-chatter mode: classic duck-and-overlap.
         playerRef.current?.player?.setVolume(
           volumeRef.current * SPOTIFY_VOL_ATTENUATION
         )
@@ -431,9 +518,22 @@ export function PlayerProvider({ children }) {
     }
     const onEnded = () => {
       dispatch(setDjSpeaking(false))
+      const wasBridge = talkBridgeRef.current
       if (!isMutedRef.current) {
+        // Talk-bridge already faded music back to full during the
+        // intro overlap; the simple ducking case needs an explicit
+        // restore. Clearing the flag here also covers the rare edge
+        // case where the DJ ends before the scheduled fade-in fires.
+        window.clearInterval(fadeIntervalRef.current)
+        fadeIntervalRef.current = null
         playerRef.current?.player?.setVolume(volumeRef.current)
       }
+      talkBridgeRef.current = false
+      track("dj.break.completed", {
+        mode: wasBridge ? "bridge" : "duck",
+        djId: currentDjRef.current?.id ?? null,
+        seedType: currentSessionRef.current?.seed?.type ?? null,
+      })
       prepareNextDjAudio()
     }
     audio.addEventListener("play", onPlay)
@@ -443,18 +543,19 @@ export function PlayerProvider({ children }) {
       audio.pause()
       window.clearTimeout(djAudioTimeoutRef.current)
       window.clearTimeout(delayNextTrackTimeoutRef.current)
+      window.clearInterval(fadeIntervalRef.current)
+      fadeIntervalRef.current = null
+      talkBridgeRef.current = false
       audio.removeEventListener("play", onPlay)
       audio.removeEventListener("ended", onEnded)
       audioRef.current = null
     }
   }, [dispatch, prepareNextDjAudio])
 
-  // Prompt for profile if missing — moved from Radio.jsx's componentDidMount.
-  useEffect(() => {
-    if (accessToken && (!profile?.name || !profile?.zip)) {
-      dispatch(showProfile())
-    }
-  }, [accessToken, profile?.name, profile?.zip, dispatch])
+  // The profile dialog used to pop unbidden when basic profile fields
+  // were missing; we no longer collect any location fields (the server
+  // IP-geocodes per request) so users open the dialog explicitly from
+  // the AccountMenu when they want to change their display name.
 
   // ── Imperative API exposed via context ─────────────────────────────────
   const ensureToken = useCallback(() => {
@@ -468,6 +569,9 @@ export function PlayerProvider({ children }) {
       if (!ensureToken() || !uris?.length) return
       window.clearTimeout(djAudioTimeoutRef.current)
       window.clearTimeout(delayNextTrackTimeoutRef.current)
+      window.clearInterval(fadeIntervalRef.current)
+      fadeIntervalRef.current = null
+      talkBridgeRef.current = false
       delayNextTrackRef.current = false
       trackDelaySetRef.current = false
       audioRef.current?.pause()
@@ -499,6 +603,9 @@ export function PlayerProvider({ children }) {
       }
       window.clearTimeout(djAudioTimeoutRef.current)
       window.clearTimeout(delayNextTrackTimeoutRef.current)
+      window.clearInterval(fadeIntervalRef.current)
+      fadeIntervalRef.current = null
+      talkBridgeRef.current = false
       delayNextTrackRef.current = false
       trackDelaySetRef.current = false
       audioRef.current?.pause()
@@ -561,6 +668,9 @@ export function PlayerProvider({ children }) {
       // step on the new playback.
       window.clearTimeout(djAudioTimeoutRef.current)
       window.clearTimeout(delayNextTrackTimeoutRef.current)
+      window.clearInterval(fadeIntervalRef.current)
+      fadeIntervalRef.current = null
+      talkBridgeRef.current = false
       delayNextTrackRef.current = false
       trackDelaySetRef.current = false
       audioRef.current?.pause()
@@ -847,7 +957,16 @@ export function PlayerProvider({ children }) {
   const pause = useCallback(() => playerRef.current?.player?.pause(), [])
   const next = useCallback(() => playerRef.current?.player?.nextTrack(), [])
   const previous = useCallback(() => playerRef.current?.player?.previousTrack(), [])
-  const seek = useCallback((ms) => playerRef.current?.player?.seek(ms), [])
+  const seek = useCallback(
+    (ms) => {
+      // Optimistically dispatch the new position so the scrubber
+      // visual jumps immediately instead of snapping back to the old
+      // value while we wait for the SDK's next progress_update.
+      dispatch(setPosition(ms))
+      try { playerRef.current?.player?.seek(ms) } catch (_) { /* noop */ }
+    },
+    [dispatch]
+  )
 
   // Hard-stop everything currently playing: Spotify music + the DJ overlay
   // + any scheduled DJ break. Called by useStartSession when the user picks
@@ -857,6 +976,9 @@ export function PlayerProvider({ children }) {
   const stopCurrentPlayback = useCallback(() => {
     window.clearTimeout(djAudioTimeoutRef.current)
     window.clearTimeout(delayNextTrackTimeoutRef.current)
+    window.clearInterval(fadeIntervalRef.current)
+    fadeIntervalRef.current = null
+    talkBridgeRef.current = false
     delayNextTrackRef.current = false
     trackDelaySetRef.current = false
     djAudioPendingRef.current = false
@@ -865,6 +987,46 @@ export function PlayerProvider({ children }) {
     dispatch(setDjSpeaking(false))
     try { playerRef.current?.player?.pause() } catch (_) { /* noop */ }
   }, [dispatch])
+
+  // Push the chosen repeat mode to Spotify. Failures are swallowed
+  // because the local UI state is the source of truth and a 404 here
+  // just means there's no active device to push to.
+  const setRepeatModeOnSpotify = useCallback(async (mode) => {
+    dispatch(setRepeatMode(mode))
+    track("player.repeat.changed", {
+      mode,
+      seedType: currentSessionRef.current?.seed?.type ?? null,
+      seedKey: currentSessionRef.current?.id ?? null,
+    })
+    try {
+      await spotifyApiRef.current?.setRepeat(mode)
+    } catch (err) {
+      console.warn("setRepeat failed:", err?.message || err)
+    }
+  }, [dispatch])
+
+  // End the current session entirely: pauses playback, drops the DJ
+  // overlay, clears the in-memory session / context / current-track,
+  // and closes the Now Playing drawer. The user lands back on Home
+  // with an empty player. Recent sessions stay in recentSessions —
+  // those rows live on the server and aren't affected here.
+  //
+  // `reason` flows through to telemetry so we can see which surface
+  // (swipe / button / future) is driving end-session adoption.
+  const endSession = useCallback((reason = "unknown") => {
+    const session = currentSessionRef.current
+    track("session.ended", {
+      reason,
+      seedType: session?.seed?.type ?? null,
+      seedKey: session?.id ?? null,
+      djId: currentDjRef.current?.id ?? null,
+    })
+    stopCurrentPlayback()
+    dispatch(closeNowPlaying())
+    dispatch(clearCurrentSession())
+    dispatch(setCurrentContext(null))
+    dispatch(clearCurrentTrack())
+  }, [dispatch, stopCurrentPlayback])
 
   const selectDj = useCallback(
     (dj) => {
@@ -893,6 +1055,9 @@ export function PlayerProvider({ children }) {
     if (!audio || !audioURI) return
     window.clearTimeout(djAudioTimeoutRef.current)
     window.clearTimeout(delayNextTrackTimeoutRef.current)
+    window.clearInterval(fadeIntervalRef.current)
+    fadeIntervalRef.current = null
+    talkBridgeRef.current = false
     delayNextTrackRef.current = false
     trackDelaySetRef.current = false
     djAudioPendingRef.current = false
@@ -931,6 +1096,33 @@ export function PlayerProvider({ children }) {
   // keys. Re-runs whenever the current track changes; ignored on
   // browsers without support (older Safari, etc.).
   const isPlayingForMS = useSelector((s) => s.player?.isPlaying)
+
+  // Scrubber tick. The Spotify Web Playback SDK only fires position
+  // updates on state changes (track change, pause, resume, seek), so
+  // the slider would otherwise stay frozen between songs. We bump
+  // positionMs locally each second while playing; the next authoritative
+  // SDK update overwrites it.
+  const positionMsRef = useRef(0)
+  const durationMsRef = useRef(0)
+  const positionMsSel = useSelector((s) => s.player?.positionMs ?? 0)
+  const durationMsSel = useSelector((s) => s.player?.durationMs ?? 0)
+  useEffect(() => { positionMsRef.current = positionMsSel }, [positionMsSel])
+  useEffect(() => { durationMsRef.current = durationMsSel }, [durationMsSel])
+  useEffect(() => {
+    if (!isPlayingForMS) return
+    const id = window.setInterval(() => {
+      // Don't tick during DJ overlay playback — Spotify is paused/ducked
+      // and the position shouldn't advance.
+      if (audioRef.current && !audioRef.current.paused) return
+      const dur = durationMsRef.current
+      const next = positionMsRef.current + 1000
+      if (dur && next > dur) return
+      positionMsRef.current = next
+      dispatch(setPosition(next))
+    }, 1000)
+    return () => window.clearInterval(id)
+  }, [isPlayingForMS, dispatch])
+
   useEffect(() => {
     if (typeof navigator === "undefined" || !navigator.mediaSession) return
     if (!playerCurrentTrack) {
@@ -1043,6 +1235,8 @@ export function PlayerProvider({ children }) {
       selectDj,
       playDjAudio,
       stopCurrentPlayback,
+      setRepeatModeOnSpotify,
+      endSession,
     }),
     [
       playTracks,
@@ -1059,6 +1253,8 @@ export function PlayerProvider({ children }) {
       selectDj,
       playDjAudio,
       stopCurrentPlayback,
+      setRepeatModeOnSpotify,
+      endSession,
     ]
   )
 

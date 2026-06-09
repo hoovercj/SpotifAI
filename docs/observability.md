@@ -59,6 +59,10 @@ The `listenSessionId` is the join key for "find every event from one playback se
 | `tts.synthesize` | `server/services/tts/gemini.js` | `model`, `voiceId` | `textChars`, `wavBytes` |
 | `station.tracks.generated` | `server/services/aiStations/generateStationTracks.js` | `genreId`, `stationId` | `ms`, `candidates`, `resolved` |
 | `feedback.submitted` | `server/routes/feedback.js` (server) + `feedback.submitted.client` from `client/Components/shell/FeedbackDialog.jsx` | `userIdHash`, `listenSessionId`, `requestId`, `path`, `seedKey`, `seedType`, `djId`, `trackUri`, `userAgent`, `contactOk`, `messageLen`, `message` | — |
+| `session.ended` | `client/Components/player/PlayerProvider.jsx` `endSession()` | `reason` (`swipe` \| `button` \| `unknown`), `seedType`, `seedKey`, `djId` | — |
+| `player.repeat.changed` | same, `setRepeatModeOnSpotify()` | `mode` (`off` \| `context` \| `track`), `seedType`, `seedKey` | — |
+| `dj.break.scheduled` | same, `scheduleDjAudio()` | `mode` (`bridge` \| `duck`), `djId`, `personaSlug`, `seedType`, `seedKey` | `audioDurationMs` (in properties) |
+| `dj.break.completed` | same, audio `onEnded` handler | `mode`, `djId`, `seedType` | — |
 
 All events also carry `listenSessionId` automatically (via the client telemetry initializer or the server's `AsyncLocalStorage` context) where one was supplied — see [Correlation IDs](#correlation-ids) above. Client-side exceptions auto-collected from the Spotify Web Playback SDK additionally carry `source` (e.g. `spotify-web-playback`, `playSession`, `session.refill`, `next-content`, `playDjAudio`, `mediaSession.nextTrack`, …), and where applicable `errorType`, `status`, `seedKey`, `seedType`, `trackUri`, `djId` — see [client/Components/player/PlayerProvider.jsx](../client/Components/player/PlayerProvider.jsx).
 

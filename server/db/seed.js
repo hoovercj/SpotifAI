@@ -1,6 +1,7 @@
 const conn = require('./conn')
 const User = require('./User')
 const Profile = require('./Profile')
+const logger = require('../services/logger')
 
 async function setAdmin(email, isAdmin) {
   try {
@@ -12,7 +13,7 @@ async function setAdmin(email, isAdmin) {
       where: { userEmail: email },
     })
   } catch (error) {
-    console.error('Upsert failed:', error)
+    logger.error({ err: error?.message, stack: error?.stack }, 'db.seed.upsert_failed')
   }
 }
 
@@ -31,7 +32,7 @@ const syncAndSeed = async () => {
       await setAdmin(email, true)
     }
   } catch (err) {
-    console.log('error seeding db')
+    logger.error('db.seed.failed')
   }
 }
 

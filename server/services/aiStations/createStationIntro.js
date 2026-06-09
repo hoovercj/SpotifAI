@@ -92,6 +92,7 @@ async function createStationIntro({ djId, genre, station, mode = "warm" }) {
       const { wavBuffer } = await synthesizeBuffer({
         text: ttsInput,
         voiceId,
+        personaSlug,
       })
       return { wavBuffer, text: scriptText }
     },

@@ -14,6 +14,7 @@ const { newsSegment } = require('../services/news')
 const { musicFactsSegment } = require('../services/musicFacts')
 const logger = require('../services/logger')
 const { trackEvent, trackException } = require('../services/telemetry')
+const { ipGeo } = require('../services/ipGeo')
 
 // Per-(jamSession, dj) chat sessions. Keyed so each DJ keeps an independent
 // conversation history within a single listening session, and multiple
@@ -32,9 +33,8 @@ async function getOrCreateChat(jamSessionId, djId) {
   return chatSessions.get(key)
 }
 
-const getLatLonFromZip = require('../services/locationIQ')
-
 router.post('/next-content', async (req, res) => {
+  const t0 = Date.now()
   try {
     const { curTrack, nextTrack, jamSessionId, djId, station } = req.body
 
@@ -56,39 +56,28 @@ router.post('/next-content', async (req, res) => {
     }
 
     const chat = await getOrCreateChat(jamSessionId, djId)
+    // Resolve the persona once so the chatter event can carry slug +
+    // voice. Independent of getOrCreateChat's internal lookup — the
+    // overhead is a single cached file read.
+    const persona = await djCharacters(djId)
 
     const user = await User.findOne({
       where: { email: userEmail },
       include: {
         model: Profile,
-        attributes: ['name', 'zip', 'lat', 'long'],
+        attributes: ['name'],
       },
     })
     if (!user) {
       return res.status(404).json({ error: 'user_not_found' })
     }
 
-    // Profile may be missing entirely — station listeners aren't required to
-    // have filled out their profile. Optional-chain everywhere so we don't
-    // crash on `user.profile.zip`.
-    const userZip = user.profile?.zip
-    if (userZip && !user.profile?.lat && !user.profile?.long) {
-      ;(async function () {
-        const coordinates = await getLatLonFromZip(userZip)
-        console.log(coordinates)
-        const [profile, created] = await Profile.upsert(
-          {
-            userEmail: userEmail,
-            lat: coordinates.latitude,
-            long: coordinates.longitude,
-          },
-          {
-            returning: true,
-            where: { userEmail: userEmail },
-          }
-        )
-      })()
-    }
+    // Coarse IP-based location for weather / news / transit segments.
+    // Result is per-IP cached for 6h — most listening sessions get one
+    // geocoder hit. Null in dev (private IP) and on provider failure;
+    // downstream segments fall back to a song intro.
+    const geo = await ipGeo(req.ip)
+    user.location = geo
 
     let jamSession = await JamSession.findOne({
       where: { jamSessionId, userEmail },
@@ -107,6 +96,17 @@ router.post('/next-content', async (req, res) => {
       station,
       chat
     )
+    trackEvent('content.next-content', {
+      djId,
+      personaSlug: persona?.slug || null,
+      voiceId: persona?.details?.voiceID || null,
+      jamSessionId,
+      seedKey: station?.uri || null,
+      seedType: station?.description || null,
+      curTrackUri: curTrack?.uri || null,
+      geoCountry: geo?.country || null,
+      hasLocation: Boolean(geo),
+    }, { ms: Date.now() - t0 })
     res.json(content)
   } catch (err) {
     // Without this catch the route was crashing the request without any
@@ -188,7 +188,7 @@ router.get('/exclusive-dj', async (req, res) => {
     const settings = await Settings.findOne({ where: { userEmail: email } })
     return res.json({ djId: settings?.exclusiveDjId ?? null })
   } catch (err) {
-    console.error('GET /exclusive-dj failed:', err)
+    logger.error({ err: err?.message, stack: err?.stack }, 'content.exclusive-dj.read_failed')
     return res.status(500).json({ error: 'exclusive_dj_read_failed' })
   }
 })
@@ -209,7 +209,7 @@ router.put('/exclusive-dj', async (req, res) => {
     )
     return res.json({ djId: settings.exclusiveDjId ?? null })
   } catch (err) {
-    console.error('PUT /exclusive-dj failed:', err)
+    logger.error({ err: err?.message, stack: err?.stack }, 'content.exclusive-dj.write_failed')
     return res.status(500).json({ error: 'exclusive_dj_write_failed' })
   }
 })
@@ -226,7 +226,7 @@ router.get('/dj-preference/:seedKey', async (req, res) => {
     if (!pref) return res.status(404).json({ error: 'not_found' })
     return res.json({ djId: pref.djId })
   } catch (err) {
-    console.error('GET /dj-preference failed:', err)
+    logger.error({ err: err?.message, stack: err?.stack, seedKey }, 'content.dj-preference.read_failed')
     return res.status(500).json({ error: 'dj_preference_read_failed' })
   }
 })
@@ -247,7 +247,7 @@ router.put('/dj-preference/:seedKey', async (req, res) => {
     )
     return res.json({ djId: pref.djId })
   } catch (err) {
-    console.error('PUT /dj-preference failed:', err)
+    logger.error({ err: err?.message, stack: err?.stack, seedKey }, 'content.dj-preference.write_failed')
     return res.status(500).json({ error: 'dj_preference_write_failed' })
   }
 })
@@ -263,7 +263,7 @@ router.delete('/dj-preference/:seedKey', async (req, res) => {
     })
     return res.json({ deleted: count })
   } catch (err) {
-    console.error('DELETE /dj-preference failed:', err)
+    logger.error({ err: err?.message, stack: err?.stack, seedKey }, 'content.dj-preference.delete_failed')
     return res.status(500).json({ error: 'dj_preference_delete_failed' })
   }
 })
@@ -314,7 +314,7 @@ router.post('/info-request', async (req, res) => {
       where: { email },
       include: {
         model: Profile,
-        attributes: ['name', 'zip', 'lat', 'long'],
+        attributes: ['name'],
       },
     })
     if (!user) {
@@ -326,13 +326,13 @@ router.post('/info-request', async (req, res) => {
 
     let prompt = null
     if (kind === 'weather') {
-      const { lat, long } = user.profile || {}
-      if (lat == null || long == null) {
+      const geo = await ipGeo(req.ip)
+      if (!geo) {
         return res
           .status(412)
-          .json({ error: 'profile_location_required' })
+          .json({ error: 'location_unavailable' })
       }
-      const weatherReport = await currentWeather(lat, long)
+      const weatherReport = await currentWeather(geo.lat, geo.long)
       prompt = `${name} just asked for a quick weather update. Deliver it in two or three short sentences using the data below. Do NOT introduce, name, or announce any song — the music is already playing underneath you. End with a brief sign-off.\n\nWeather: ${weatherReport}`
     } else if (kind === 'news') {
       prompt = await newsSegment({
@@ -378,7 +378,7 @@ router.post('/info-request', async (req, res) => {
     )
     return res.json({ audioURI, transcript: content.text, kind })
   } catch (err) {
-    console.error('POST /api/content/info-request failed:', err)
+    logger.error({ err: err?.message, stack: err?.stack }, 'content.info-request.failed')
     return res.status(500).json({
       error: 'info_request_failed',
       message: err?.message || 'Internal Server Error',

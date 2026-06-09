@@ -17,8 +17,6 @@ param sessionSecret string
 @secure()
 param openWeatherApiKey string
 @secure()
-param locationIqApiKey string
-@secure()
 param rejseplanenAccessId string
 
 @description('Comma-separated list of admin email addresses (seeded on every boot).')
@@ -60,7 +58,6 @@ resource plan 'Microsoft.Web/serverfarms@2023-12-01' = {
 // Filter optional settings so we don't ship empty app settings if they aren't set.
 var optionalSettings = filter([
   { name: 'OPEN_WEATHER_API_KEY', value: openWeatherApiKey }
-  { name: 'LOCATION_IQ_API_KEY', value: locationIqApiKey }
   { name: 'REJSEPLANEN_ACCESS_ID', value: rejseplanenAccessId }
   { name: 'ADMIN_EMAILS', value: adminEmails }
   { name: 'APPLICATIONINSIGHTS_CONNECTION_STRING', value: appInsightsConnectionString }

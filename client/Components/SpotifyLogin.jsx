@@ -55,7 +55,7 @@ const FEATURES = [
   {
     icon: MapPin,
     title: "Hyper-local touches",
-    body: "Localized weather, transit, and news segments based on your profile zip.",
+    body: "Localized weather, transit, and news segments based on where you're listening from.",
   },
 ]
 

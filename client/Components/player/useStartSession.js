@@ -10,6 +10,7 @@ import {
   fetchRecentSessions,
   promoteRecent,
 } from "../../store/recentSessionsSlice"
+import { trackException } from "../../lib/telemetry"
 
 /**
  * Single entry point for "the user tapped something playable".
@@ -235,6 +236,10 @@ export function useStartSession() {
         }
       } catch (err) {
         console.warn("Session start failed:", err)
+        trackException(err, {
+          source: "session.start",
+          seedType: seed?.type ?? null,
+        })
         // Flip the abort flag BEFORE anything else — the in-flight
         // introPromise has a `.then` that re-dispatches setSessionLoading.
         // Without this, that callback fires later, clobbers the error

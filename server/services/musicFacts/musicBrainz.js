@@ -15,6 +15,8 @@
  */
 'use strict'
 
+const logger = require('../logger')
+
 const USER_AGENT =
   process.env.MUSICBRAINZ_USER_AGENT ||
   'SpotifAI/0.1 (+https://github.com/hoovercj/SpotifAI)'
@@ -190,7 +192,7 @@ async function lookupRecording({ artist, title } = {}) {
     // retried on every track of the same artist.
     cacheSet(key, null)
     if (process.env.DEBUG) {
-      console.warn(`MusicBrainz lookup failed for "${t}" / "${a}":`, err?.message || err)
+      logger.warn({ err: err?.message, title: t, artist: a }, 'musicFacts.musicBrainz.lookup_failed')
     }
     return null
   } finally {

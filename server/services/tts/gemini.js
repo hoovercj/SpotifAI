@@ -45,7 +45,7 @@ function sanitizeBaseName(name) {
 const PROJECT_ROOT = path.resolve(__dirname, '..', '..', '..');
 const AUDIO_DIR = path.join(PROJECT_ROOT, 'runtime', 'audio');
 
-async function synthesizeBuffer({ text, voiceId }) {
+async function synthesizeBuffer({ text, voiceId, personaSlug = null }) {
   const requestedFormat = (process.env.TTS_OUTPUT || 'wav').toLowerCase();
   if (requestedFormat !== 'wav') {
     throw new Error(
@@ -61,7 +61,7 @@ async function synthesizeBuffer({ text, voiceId }) {
   const response = await withDependency(
     'gemini',
     'tts.synthesize',
-    { model, voiceId, textChars },
+    { model, voiceId, personaSlug, textChars },
     () =>
       ai.models.generateContent({
         model,
@@ -88,14 +88,14 @@ async function synthesizeBuffer({ text, voiceId }) {
   const wavBuffer = Buffer.concat([wavHeader, pcmBytes]);
   trackEvent(
     'tts.synthesize',
-    { model, voiceId },
+    { model, voiceId, personaSlug },
     { textChars, wavBytes: wavBuffer.length }
   );
   return { wavBuffer, text, format: 'wav' };
 }
 
-async function synthesize({ text, voiceId, fileBaseName }) {
-  const { wavBuffer, format } = await synthesizeBuffer({ text, voiceId });
+async function synthesize({ text, voiceId, fileBaseName, personaSlug = null }) {
+  const { wavBuffer, format } = await synthesizeBuffer({ text, voiceId, personaSlug });
   await fs.promises.mkdir(AUDIO_DIR, { recursive: true });
   const safeName = sanitizeBaseName(fileBaseName);
   const filePath = path.join(AUDIO_DIR, `${safeName}.wav`);

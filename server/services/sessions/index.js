@@ -119,9 +119,9 @@ function startGenerationJob({ seed, spotifyAccessToken, excludeUris, generator }
       }
       settleJob(key, { status: "ready", tracks })
     } catch (err) {
-      console.error(
-        `Session generation failed for ${key}:`,
-        err?.message || err
+      logger.error(
+        { err: err?.message, stack: err?.stack, key, seedType: seed?.type },
+        'sessions.generation_job.failed'
       )
       settleJob(key, {
         status: "failed",

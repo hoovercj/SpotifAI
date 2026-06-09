@@ -1,12 +1,12 @@
 const router = require("express").Router()
 const { Profile } = require("../db")
+const logger = require("../services/logger")
 
 router.get("/", async (req, res, next) => {
   try {
     const profile = await Profile.findOne({
       where: { userEmail: req.session.email },
     })
-    console.log("profile", profile)
     res.json(profile)
   } catch (err) {
     next(err)

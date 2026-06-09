@@ -17,9 +17,6 @@ import { hideProfile, updateProfile } from "../store/userSlice"
 
 const validationSchema = Yup.object().shape({
   name: Yup.string().required("First Name is required"),
-  zip: Yup.string()
-    .matches(/^[0-9]{5}$/, "Zip Code must be a 5-digit number")
-    .required("Zip Code is required"),
 })
 
 export default function UserProfile() {
@@ -33,12 +30,12 @@ export default function UserProfile() {
         <DialogHeader>
           <DialogTitle>Your profile</DialogTitle>
           <DialogDescription>
-            Used to tailor weather, transit, and news segments to your area.
+            Lets the DJ address you by name on-air.
           </DialogDescription>
         </DialogHeader>
 
         <Formik
-          initialValues={{ name: profile.name || "", zip: profile.zip || "" }}
+          initialValues={{ name: profile.name || "" }}
           enableReinitialize
           validationSchema={validationSchema}
           onSubmit={(values) => dispatch(updateProfile(values))}
@@ -55,22 +52,6 @@ export default function UserProfile() {
                 />
                 <ErrorMessage
                   name="name"
-                  component="span"
-                  className="text-xs text-destructive"
-                />
-              </label>
-
-              <label className="flex flex-col gap-1.5">
-                <span className="text-sm font-medium">Zip code</span>
-                <Field
-                  as={Input}
-                  name="zip"
-                  inputMode="numeric"
-                  placeholder="12345"
-                  className={cn(errors.zip && touched.zip && "border-destructive")}
-                />
-                <ErrorMessage
-                  name="zip"
                   component="span"
                   className="text-xs text-destructive"
                 />

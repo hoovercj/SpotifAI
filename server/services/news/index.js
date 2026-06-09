@@ -13,6 +13,7 @@ const drDk = require('./drDk');
 const rtveEs = require('./rtveEs');
 const iowa = require('./iowa');
 const SeenArticle = require('../../db/SeenArticle');
+const logger = require('../logger');
 
 const PROVIDERS = { dk: drDk, es: rtveEs, iowa };
 
@@ -79,7 +80,7 @@ async function newsSegment({ name, nextTrackTitle, nextTrackArtist, omitSegue = 
   try {
     article = await pickFreshArticle(provider);
   } catch (err) {
-    console.error(`[news:${locale}] feed fetch failed:`, err.message);
+    logger.warn({ err: err?.message, locale }, 'news.feed_fetch_failed');
     return null;
   }
   if (!article) return null;
@@ -94,7 +95,7 @@ async function newsSegment({ name, nextTrackTitle, nextTrackArtist, omitSegue = 
   } catch (err) {
     // unique constraint race — safe to ignore
     if (err.name !== 'SequelizeUniqueConstraintError') {
-      console.error('[news] failed to record seen article:', err.message);
+      logger.warn({ err: err?.message }, 'news.record_seen_failed');
     }
   }
 

@@ -1,4 +1,5 @@
 const JamSessionTracks = require("../../../db/JamSessionTracks");
+const logger = require("../../logger");
 
 async function saveToDb(
   jamSessionId,
@@ -19,9 +20,9 @@ async function saveToDb(
       djAudioDataURI: audioDataURI,
       djAudioTranscript: transcript,
     });
-    console.log("Data saved successfully!");
+    logger.debug('rundown.saveToDb.ok');
   } catch (error) {
-    console.error("Error saving to JamSessionTracks:", error);
+    logger.error({ err: error?.message, stack: error?.stack }, 'rundown.saveToDb.failed');
   }
 }
 

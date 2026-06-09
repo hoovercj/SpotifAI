@@ -56,7 +56,7 @@ export default function AIStationsRow({ axis, axisId, stations }) {
   return (
     <div className="flex flex-col gap-1">
       <ScrollableRow title="AI Stations" subtitle={subtitle}>
-        {stations.map((station) => (
+        {stations.map((station, idx) => (
           <StationCard
             key={station.id}
             station={station}
@@ -65,6 +65,7 @@ export default function AIStationsRow({ axis, axisId, stations }) {
               stationId: station.id,
             })}
             onClick={() => handleStart(station)}
+            priority={idx === 0}
           />
         ))}
       </ScrollableRow>
@@ -86,7 +87,7 @@ export default function AIStationsRow({ axis, axisId, stations }) {
  *   3. AI badge top-left, station name bottom — same content as the
  *      old gradient-only card, just sitting on top of the new visuals.
  */
-function StationCard({ station, coverUrl, onClick }) {
+function StationCard({ station, coverUrl, onClick, priority }) {
   const [from, to] = station.gradient || ["#a855f7", "#ec4899"]
   const [imageBroken, setImageBroken] = React.useState(false)
   // coverUrl may be a string (legacy) OR an image descriptor object
@@ -107,7 +108,12 @@ function StationCard({ station, coverUrl, onClick }) {
           <img
             src={sources.jpg || sources.webp}
             alt=""
-            loading="lazy"
+            // First card in the row claims the LCP slot when this row
+            // is rendered above the fold (SearchTab genre/mood views).
+            // The rest stay lazy so we don't blow the priority budget
+            // on the off-screen scroll tail.
+            loading={priority ? undefined : "lazy"}
+            fetchpriority={priority ? "high" : undefined}
             decoding="async"
             onError={() => setImageBroken(true)}
             className="absolute inset-0 h-full w-full object-cover transition-transform duration-200 group-hover:scale-105"

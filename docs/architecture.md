@@ -12,7 +12,7 @@ flowchart LR
     App -->|"intros/{personaVer}_{promptVer}/{seedKey}/{djId}.wav"| Blob[(Azure Blob<br/>audio-intros)]
     App -->|sessions, prefs, recent| Postgres[(Postgres Flexible Server)]
     App -->|structured logs + events| AppInsights[(Application Insights<br/>+ Log Analytics)]
-    App -->|optional| External[OpenWeather · LocationIQ ·<br/>Rejseplanen · MusicBrainz · Wikipedia]
+    App -->|optional| External[OpenWeather · ip-api.com ·<br/>Rejseplanen · MusicBrainz · Wikipedia]
 ```
 
 ## Repository layout

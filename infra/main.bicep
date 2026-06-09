@@ -39,10 +39,6 @@ param sessionSecret string
 @secure()
 param openWeatherApiKey string = ''
 
-@description('LocationIQ API key (optional — pass empty string to disable)')
-@secure()
-param locationIqApiKey string = ''
-
 @description('Rejseplanen access ID (optional — pass empty string to disable live transit feed)')
 @secure()
 param rejseplanenAccessId string = ''
@@ -116,7 +112,6 @@ module web 'modules/appService.bicep' = {
     spotifyRedirectUri: spotifyRedirectUri
     sessionSecret: sessionSecret
     openWeatherApiKey: openWeatherApiKey
-    locationIqApiKey: locationIqApiKey
     rejseplanenAccessId: rejseplanenAccessId
     adminEmails: adminEmails
     appInsightsConnectionString: appInsights.outputs.connectionString

@@ -66,9 +66,11 @@ export default function PrivacyPage() {
             be reversed back to you.
           </li>
           <li>
-            <strong className="text-foreground">Profile zip code</strong> (if
-            you enter one) — used to fetch local weather and headlines for
-            the DJ. Never shared.
+            <strong className="text-foreground">Coarse location from your IP</strong>
+            — used at request time to fetch local weather and headlines for
+            the DJ. We never store the raw IP or precise coordinates; only
+            the derived city/region/country is forwarded to the geocoder and
+            the per-request location is cached in memory by IP for a few hours.
           </li>
           <li>
             <strong className="text-foreground">Listening behavior</strong>

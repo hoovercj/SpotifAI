@@ -9,8 +9,6 @@ async function constructPromptListWithCounts(details) {
   let djStyle = djProfile.details.djStyle
   let context = djProfile.details.context
 
-  console.log('user', details.user)
-  console.log('user, details.user.profile', details.user.profile)
   let name = details.user.profile.name
   // `The following is a transcript of everything said by you, a disk jockey. The Human is prompting you on what to say and how. Respond following the provided INSTRUCTIONS. Create you answer so they are thematically consistent with the provided CONTEXT:`;
   let brevity = [

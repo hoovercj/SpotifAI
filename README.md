@@ -94,7 +94,7 @@ The script reads `appearance:` + `scene:` from each persona's markdown file (see
 - **Spotify Premium** account + a Spotify Developer app (client ID/secret, redirect URI registered)
 - **Google AI Studio API key** (`GOOGLE_API_KEY`) — free tier is sufficient to start
 - *(optional)* **Rejseplanen access ID** — free registration; needed only if you want Copenhagen transit alerts to use the live Rejseplanen feed (otherwise falls back to DSB RSS)
-- *(optional)* **OpenWeather** + **LocationIQ** API keys for the weather segment
+- *(optional)* **OpenWeather** API key for the weather segment (lat/long is derived from the request IP via ip-api.com — no key required)
 
 ---
 
@@ -218,7 +218,6 @@ azd env set SPOTIFY_CLIENT_SECRET <your-spotify-client-secret>
 azd env set SPOTIFY_REDIRECT_URI  https://<your-app-name>.azurewebsites.net
 # Optional:
 azd env set OPEN_WEATHER_API_KEY    <key>
-azd env set LOCATION_IQ_API_KEY     <key>
 azd env set REJSEPLANEN_ACCESS_ID   <key>
 
 # 3. Provision + deploy in one go

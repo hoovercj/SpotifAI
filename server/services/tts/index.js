@@ -35,12 +35,12 @@ function provider() {
   return p;
 }
 
-async function synthesize({ text, voiceId, fileBaseName }) {
-  return provider().synthesize({ text, voiceId, fileBaseName });
+async function synthesize({ text, voiceId, fileBaseName, personaSlug }) {
+  return provider().synthesize({ text, voiceId, fileBaseName, personaSlug });
 }
 
-async function synthesizeBuffer({ text, voiceId }) {
-  return provider().synthesizeBuffer({ text, voiceId });
+async function synthesizeBuffer({ text, voiceId, personaSlug }) {
+  return provider().synthesizeBuffer({ text, voiceId, personaSlug });
 }
 
 module.exports = { synthesize, synthesizeBuffer };

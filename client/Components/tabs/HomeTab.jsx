@@ -89,9 +89,9 @@ export default function HomeTab() {
   // tuningOverride passes through name + image so NowPlayingBar can
   // paint the tuning state with the same artwork the tile showed.
   const startTrackSession = (track) => {
-    if (!track?.id) return
+    if (!track?.uri) return
     start(
-      { type: "track", trackId: track.id },
+      { type: "track", spotifyUri: track.uri },
       {
         tuningOverride: {
           name: track.name,
@@ -102,9 +102,9 @@ export default function HomeTab() {
   }
 
   const startArtistSession = (artist) => {
-    if (!artist?.id) return
+    if (!artist?.uri) return
     start(
-      { type: "artist", artistId: artist.id },
+      { type: "artist", spotifyUri: artist.uri },
       {
         tuningOverride: {
           name: `${artist.name} Radio`,
@@ -162,7 +162,7 @@ export default function HomeTab() {
           title="Jump back into a SpotifAI session"
           subtitle="Picks up where you left off, on any device"
         >
-          {recentSessions.map((item) => (
+          {recentSessions.map((item, idx) => (
             <PosterTile
               key={item.seedKey}
               image={item.imageUrl}
@@ -170,6 +170,7 @@ export default function HomeTab() {
               title={item.name}
               subtitle={seedSubtitle(item.seed)}
               onClick={() => startRecentSession(item)}
+              priority={idx === 0}
             />
           ))}
         </ScrollableRow>
@@ -177,10 +178,16 @@ export default function HomeTab() {
 
       {/* ===== Radio (gradient browse tiles) ===== */}
       <ScrollableRow title="Stations" subtitle="Browse by genre">
-        {GENRES.map((g) => (
+        {GENRES.map((g, idx) => (
           // No onClick override — genre tiles route to /search where
           // the user can pick a specific AI station from the list.
-          <GenreStationTile key={g.id} genre={g} />
+          // First tile gets `priority` ONLY when there are no recent
+          // sessions above it — otherwise the recents row owns the LCP.
+          <GenreStationTile
+            key={g.id}
+            genre={g}
+            priority={idx === 0 && recentSessions.length === 0}
+          />
         ))}
       </ScrollableRow>
 
@@ -296,6 +303,7 @@ function PosterTile({
   onClick,
   rounded,
   fallbackGradient,
+  priority,
 }) {
   const showGradient = !image && fallbackGradient
   return (
@@ -321,6 +329,14 @@ function PosterTile({
           <img
             src={image}
             alt=""
+            // LCP hint: the first tile of the first row above the
+            // fold opts out of lazy and asks the browser to prioritize
+            // this fetch. Every other tile keeps the default browser
+            // behavior (effectively lazy as soon as it scrolls into
+            // view) so we don't over-spend the priority budget.
+            loading={priority ? undefined : "lazy"}
+            fetchpriority={priority ? "high" : undefined}
+            decoding="async"
             className="h-full w-full object-cover transition-transform group-hover:scale-105"
           />
         )}

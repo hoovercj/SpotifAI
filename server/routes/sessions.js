@@ -174,7 +174,7 @@ router.post("/refill", async (req, res) => {
   } catch (err) {
     const status = err?.status || 500
     if (status >= 500) {
-      console.error("Session refill failed:", err)
+      logger.error({ err: err?.message, stack: err?.stack, seedType: seed?.type }, 'sessions.refill.failed')
     }
     return res.status(status).json({
       error: "session_refill_failed",

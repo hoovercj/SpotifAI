@@ -1,6 +1,7 @@
 const Tracks = require("../../../db/Tracks");
 const { saveToDb, reset } = require("./dbUtilities");
 const { createDefaultShow } = require("./createDefaultShow");
+const logger = require("../../logger");
 const {
   getCurrentRundownIndex,
   updateCurrentRundownIndex,
@@ -18,7 +19,7 @@ async function addPlaylistToRundown(userEmail, jamSessionId) {
     where: { userEmail },
   });
   if (!curTrack || !nextTrack) {
-    console.error(`Tracks for user ${userEmail} not found.`);
+    logger.warn({ userEmail }, 'rundown.tracks_for_user_not_found');
     return null;
   }
   let curTrackURI = curTrack.uri;

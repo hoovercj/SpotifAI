@@ -29,9 +29,6 @@
     "openWeatherApiKey": {
       "value": "${OPEN_WEATHER_API_KEY=}"
     },
-    "locationIqApiKey": {
-      "value": "${LOCATION_IQ_API_KEY=}"
-    },
     "rejseplanenAccessId": {
       "value": "${REJSEPLANEN_ACCESS_ID=}"
     },

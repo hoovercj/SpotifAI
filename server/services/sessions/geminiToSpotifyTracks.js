@@ -28,10 +28,12 @@
  */
 const { GoogleGenAI } = require("@google/genai")
 const SpotifyWebApi = require("spotify-web-api-node")
+const logger = require("../logger")
 
 const DEFAULT_TARGET_TRACKS = 30
 const DEFAULT_CANDIDATE_COUNT = 40
 const SPOTIFY_THROTTLE_MS = 120
+const MAX_TRACK_DURATION_MS = 15 * 60 * 1000
 
 let aiClient
 function getClient() {
@@ -70,7 +72,7 @@ function parseCandidates(text) {
   try {
     parsed = JSON.parse(trimmed)
   } catch (err) {
-    console.warn("Gemini session response not valid JSON; got:", trimmed.slice(0, 200))
+    logger.warn({ snippet: trimmed.slice(0, 200) }, 'session.gemini.invalid_json')
     return []
   }
   if (!Array.isArray(parsed)) return []
@@ -163,13 +165,21 @@ async function geminiToSpotifyTracks({
   const excludeSet = new Set(excludeUris || [])
   const seen = new Set()
   const out = []
+  let droppedLong = 0
   for (const track of resolved) {
     if (!track?.uri) continue
     if (excludeSet.has(track.uri)) continue
     if (seen.has(track.uri)) continue
+    if (track.durationMs && track.durationMs > MAX_TRACK_DURATION_MS) {
+      droppedLong++
+      continue
+    }
     seen.add(track.uri)
     out.push(track)
     if (out.length >= targetTracks) break
+  }
+  if (droppedLong > 0) {
+    logger.info({ droppedLong, capMs: MAX_TRACK_DURATION_MS }, 'session.tracks.dropped_long')
   }
 
   if (rateLimited && out.length < targetTracks / 2) {

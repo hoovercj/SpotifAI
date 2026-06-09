@@ -57,7 +57,11 @@ async function emitTalkSegment({
 }
 
 async function showRunner(userEmail, jamSessionId, user, djId, station, chat) {
-  const { lat, long } = user.profile
+  // Location is supplied by the route via IP-based reverse-geocoding —
+  // see services/ipGeo.js and routes/content.js. Falls back to nulls
+  // (private/loopback IPs, ip-api.com rate-limit miss, etc.) and the
+  // weather/news/transit branches handle nulls and skip to a song.
+  const { lat = null, long = null } = user.location || {}
   const { display_name } = user
   let { show, nextTrackURI, tempSongName, tempBandName } =
     await addPlaylistToRundown(userEmail, jamSessionId)
@@ -100,6 +104,24 @@ async function showRunner(userEmail, jamSessionId, user, djId, station, chat) {
 
   if (nextSlot.type === 'weather') {
     const weatherReport = await currentWeather(lat, long)
+    if (!weatherReport) {
+      // Weather provider returned nothing (missing profile lat/lon,
+      // API failure, etc). Skip to a plain song intro rather than
+      // sending "Weather: undefined" into the LLM.
+      return runSongFallback({
+        jamSessionId,
+        slot: slotAfterNext,
+        rundownIndex: currentRundownIndex + 2,
+        nextTrackURI,
+        tempSongName,
+        tempBandName,
+        show,
+        user,
+        djId,
+        station,
+        chat,
+      })
+    }
     const prompt = `Summarize this weather, be brief. Weather: ${weatherReport}. End the weather report by announcing this song by ${slotAfterNext.bandName} called ${slotAfterNext.songName}. Be very brief.`
     return emitTalkSegment({
       jamSessionId,

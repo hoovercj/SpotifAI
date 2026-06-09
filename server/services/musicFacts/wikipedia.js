@@ -15,6 +15,8 @@
  */
 'use strict'
 
+const logger = require('../logger')
+
 const USER_AGENT =
   process.env.WIKIPEDIA_USER_AGENT ||
   'SpotifAI/0.1 (+https://github.com/hoovercj/SpotifAI)'
@@ -192,7 +194,7 @@ async function lookup({ kind, title, artist } = {}) {
   } catch (err) {
     cacheSet(key, null)
     if (process.env.DEBUG) {
-      console.warn(`Wikipedia lookup failed for "${kind}:${t}":`, err?.message || err)
+      logger.warn({ err: err?.message, kind, term: t }, 'musicFacts.wikipedia.lookup_failed')
     }
     return null
   } finally {

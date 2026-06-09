@@ -66,7 +66,7 @@ function parseCandidates(text) {
   try {
     parsed = JSON.parse(trimmed)
   } catch (err) {
-    console.warn("Gemini station response not valid JSON; got:", trimmed.slice(0, 200))
+    logger.warn({ snippet: trimmed.slice(0, 200) }, 'station.gemini.invalid_json')
     return []
   }
   if (!Array.isArray(parsed)) return []
@@ -117,10 +117,9 @@ async function resolveOnSpotify(api, candidate, { onRateLimit } = {}) {
       }
       // Any other failure (404-style miss, network blip, etc.) is just a
       // single-track miss — log compactly and move on.
-      console.warn(
-        "Spotify resolve failed for",
-        q,
-        err?.body?.error?.message || err?.message || `status=${status}`
+      logger.warn(
+        { q, status, errMsg: err?.body?.error?.message || err?.message },
+        'spotify.resolve.failed'
       )
       return null
     }

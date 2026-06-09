@@ -17,9 +17,11 @@
  * personal playlists fit comfortably under it.
  */
 const SpotifyWebApi = require("spotify-web-api-node")
+const logger = require("../../logger")
 
 const MAX_TRACKS = 200
 const PAGE_SIZE = 100 // Spotify's per-page max for /v1/playlists/{id}/tracks
+const MAX_TRACK_DURATION_MS = 15 * 60 * 1000
 
 function extractPlaylistId(uri) {
   if (!uri) return null
@@ -30,6 +32,7 @@ function extractPlaylistId(uri) {
 async function fetchPlaylistTracks(api, playlistId) {
   const out = []
   let offset = 0
+  let droppedLong = 0
   while (out.length < MAX_TRACKS) {
     const res = await api.getPlaylistTracks(playlistId, {
       limit: PAGE_SIZE,
@@ -44,6 +47,10 @@ async function fetchPlaylistTracks(api, playlistId) {
       // taken down, etc.) — they have a uri but no duration. Drop them
       // so the queue refill doesn't choke later.
       if (!track.duration_ms) continue
+      if (track.duration_ms > MAX_TRACK_DURATION_MS) {
+        droppedLong++
+        continue
+      }
       out.push({
         uri: track.uri,
         name: track.name,
@@ -55,6 +62,9 @@ async function fetchPlaylistTracks(api, playlistId) {
     }
     if (items.length < PAGE_SIZE) break
     offset += PAGE_SIZE
+  }
+  if (droppedLong > 0) {
+    logger.info({ droppedLong, capMs: MAX_TRACK_DURATION_MS, playlistId }, 'playlist.tracks.dropped_long')
   }
   return out
 }

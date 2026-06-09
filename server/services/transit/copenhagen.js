@@ -12,6 +12,7 @@
  * — empty array when nothing is happening (the segment will be skipped).
  */
 const Parser = require('rss-parser');
+const logger = require('../logger');
 
 const CACHE_TTL_MS = 5 * 60 * 1000;
 const cache = { value: null, expiresAt: 0 };
@@ -63,7 +64,7 @@ async function fetchRejseplanen() {
       url: m.url || null,
     }));
   } catch (err) {
-    console.warn('[transit:rejseplanen] fetch failed:', err.message);
+    logger.warn({ err: err?.message }, 'transit.rejseplanen.fetch_failed')
     return null;
   } finally {
     clearTimeout(timer);
@@ -82,7 +83,7 @@ async function fetchDsbRss() {
       url: item.link || null,
     }));
   } catch (err) {
-    console.warn('[transit:dsb] feed fetch failed:', err.message);
+    logger.warn({ err: err?.message }, 'transit.dsb.feed_fetch_failed')
     return [];
   }
 }

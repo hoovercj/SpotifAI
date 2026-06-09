@@ -52,6 +52,83 @@ Some DJs sound sluggish. Likely causes:
 Action: pick 3 offending DJs, sample ~5 intros each, identify whether
 voice or prompt is the dominant factor, fix accordingly.
 
+### "Talk-bridge" pause when DJ chatter runs long — shipped (June 2026)
+The long-chatter handoff in
+[PlayerProvider.jsx](client/Components/player/PlayerProvider.jsx)
+now has an explicit three-phase shape:
+
+1. DJ starts at `T - TALK_BRIDGE_OUTRO_MS` of the outgoing song and
+   music fades 1.0 → 0 over the next 6s, so song A trails off under
+   the DJ's opening line.
+2. Song A ends naturally → Spotify auto-skips and the existing
+   `delayNextTrackRef` flow pauses song B. DJ talks over pure silence.
+3. With `TALK_BRIDGE_INTRO_MS` (6s) of DJ left, song B resumes and
+   music fades 0 → 1.0 back to full volume.
+
+Short clips (≤ 12s combined) keep the simple duck-and-overlap
+behavior — the new fade only kicks in when the DJ break exceeds
+`TALK_BRIDGE_THRESHOLD_MS`. Fades are linear via `setInterval` at
+~60ms steps (well under Spotify Web Playback's setVolume rate ceiling).
+A `fadeIntervalRef` + `talkBridgeRef` pair gets cleared anywhere
+DJ scheduling is torn down (session change, hard stop, on-demand DJ
+audio, audio mount cleanup) so a leftover fade can never desync from
+a fresh session.
+
+The old `MAX_VOICEOVER_DURATION` constant is gone — replaced by the
+three explicit constants (`TALK_BRIDGE_OUTRO_MS`,
+`TALK_BRIDGE_INTRO_MS`, `TALK_BRIDGE_FADE_STEP_MS`).
+
+### DJ vs music mix — DJ hard to hear over music — `idea` (investigation, from feedback)
+User reported the DJ chatter was hard to understand even with the
+music volume dropped and the DJ slider at max. Possible causes:
+- TTS WAV output isn't loudness-normalized (some personas come out
+  quiet, some loud).
+- `SPOTIFY_VOL_ATTENUATION = 0.5` may not be aggressive enough on
+  some devices / track masters.
+- HTMLAudioElement is capped at 1.0 — no headroom to boost a quiet
+  TTS clip without a Web Audio gainNode.
+
+Action: collect 5 sample WAVs across DJs, measure LUFS, decide whether
+to normalize on the server (ffmpeg-normalize step in the TTS pipeline)
+or push the DJ overlay through a Web Audio node with a gain > 1.0.
+
+### DJ persona voice instability mid-session — `idea` (investigation, from feedback)
+User reported the DJ on a `mood:workout/lift` session was Magnus
+(djId=9) for the first ~2 songs, then a "Rusty-sounding" voice on the
+third break — even though the persona portrait stayed as Magnus.
+**Telemetry now confirms the voice never actually switched**: every
+`tts.synthesize` event from that listenSessionId used `voiceId =
+Charon` (Magnus's voice — Rusty's is `Algieba`). So this is a
+*perceptual* drift inside a single voice, not a wrong-voice bug.
+
+Hypotheses worth chasing:
+- Gemini TTS produces noticeably different cadence / character within
+  one voice when the script length or audio-tag density spikes — the
+  longer "third break" segment may have pushed the voice into a
+  different timbral register.
+- LLM-emitted text included another DJ's name as an artist reference,
+  triggering a perceptual association ("that sounded like Rusty
+  because it said 'Rusty' in the audio").
+- Audio-tag bracket pronunciation: an unintended `[]` token leaking
+  into the audio can shift perceived persona.
+
+Action: sample 5 long-vs-short outputs for the same voice and listen
+side-by-side. The new persona telemetry (below) means we can
+correlate any future report with the exact voiceId, slug, and cache
+state.
+
+**Telemetry shipped alongside this roadmap entry** (June 2026):
+- `tts.synthesize` now carries `personaSlug` (in addition to existing
+  `voiceId` and `model`).
+- New `content.next-content` custom event from
+  [server/routes/content.js](server/routes/content.js) carries `djId`,
+  `personaSlug`, `voiceId`, `jamSessionId`, `seedKey`, `seedType`,
+  `curTrackUri`, `ms` so we can join any reported segment back to the
+  exact persona + voice used.
+- `intro.cache.hit` / `intro.cache.miss` / `intro.generated` already
+  carry `personaSlug` + `seedKey` + `blobPath` so cache reuse is
+  visible.
+
 ---
 
 ## DJ Format & Segue Types
@@ -240,18 +317,31 @@ Open questions:
 
 Depends on: *Geolocation services*.
 
-### Geolocation for local news / traffic / weather — `idea` (research)
-The hard problem behind the settings page. Need to:
-- Get user location (browser Geolocation API → reverse-geocode to
-  city/region)
-- Map region → news sources, traffic data source, weather provider
+### Geolocation for local news / traffic / weather — partial (June 2026)
+**Done:** IP-based reverse geocoding shipped in
+[server/services/ipGeo.js](server/services/ipGeo.js) — uses ip-api.com
+(free, no key, 45/min per source IP, well under our usage with the
+6h per-IP LRU cache). Wired into
+[server/routes/content.js](server/routes/content.js) so every
+`/api/content/next-content` request gets a `{ lat, long, city,
+region, country, timezone }` location derived from `req.ip` and forwarded
+to `showRunner` via `user.location`. All traces of the old zip-based
+flow are gone — the `UserProfile` dialog no longer asks for a zip,
+the Profile model's `zip`/`lat`/`long` columns are removed, the old
+`services/locationIQ.js` helper is deleted, and the
+`LOCATION_IQ_API_KEY` env var has been pulled out of infra + CI +
+docs (LocationIQ never had an IP-geo endpoint usable to us).
 
-Open questions:
-- Provider choices — weather (OpenWeather? Met?), traffic (Azure Maps?
-  Google? Bing?), news (RSS aggregation? a paid news API?)
-- Cost model — most of these are per-request paid APIs; how aggressively
-  do we cache per-region?
-- Privacy — coarse location only, never store raw lat/lon.
+**Still open:**
+- Map region → news sources (DR regional feeds, RTVE autonomous
+  communities, Iowa local source filter, etc.). Today the weather
+  segment uses the new lat/long; news is still global.
+- Traffic data provider (Azure Maps? Bing?).
+- Per-user manual override in settings for VPN users / expats whose
+  IP geo would be wrong.
+- Cost model — current per-IP cache means free tier covers us for
+  now, but log `content.next-content` `hasLocation=false` to spot
+  where we're missing coverage.
 
 ### Mood / activity station artwork + DJ awareness — `idea`
 Genre stations have cover art (see `debug/station-cover-candidates/`);
@@ -284,6 +374,85 @@ Open questions:
 Unlocks: cleaner "interrupt with a request" UX, less leftover state when
 sessions end.
 
+### Cap maximum track length — shipped (June 2026)
+A user's mood:workout/lift session picked **Dopesmoker** (a single
+1h+ track). The catalog filter now rejects anything longer than 15
+minutes at the candidate-track stage in
+[server/services/sessions/geminiToSpotifyTracks.js](server/services/sessions/geminiToSpotifyTracks.js)
+(mood / track / artist seeds) and on the playlist-fetch path in
+[server/services/sessions/generators/fromPlaylist.js](server/services/sessions/generators/fromPlaylist.js).
+Dropped counts are logged via Pino (`session.tracks.dropped_long`,
+`playlist.tracks.dropped_long`) so we can spot heavy-cap seeds in
+App Insights and tune later if needed.
+
+Still open (deferred until we see real data):
+- Per-seed-type caps (classical/jazz/ambient legitimately want
+  longer tracks). Current global 15-min cap is a placeholder that
+  matches the original feedback ceiling — generous enough that
+  most classical movements still fit.
+- User override in settings.
+
+### "End / stop session" control — shipped (June 2026)
+Two entry points landed for terminating the current session:
+
+- **Swipe-left on the minimized [NowPlayingBar](client/Components/player/NowPlayingBar.jsx)** —
+  framer-motion `drag` + `dragSnapToOrigin` reveals a red "Stop
+  session" hint that ramps in proportional to drag distance, then
+  commits on release past the threshold (or with enough velocity).
+  A swipe-up on the same bar opens the full-screen view.
+- **"Stop session" link** under the transport controls in
+  [NowPlayingScreen.jsx](client/Components/player/NowPlayingScreen.jsx).
+
+Both call the new `endSession()` helper in
+[PlayerProvider.jsx](client/Components/player/PlayerProvider.jsx),
+which pauses Spotify + the DJ overlay, dispatches
+`clearCurrentSession` / `clearCurrentTrack` / `setCurrentContext(null)`,
+and closes the drawer. The matching `recent_session` row stays on the
+server so the user can re-tap the seed from the Home rail.
+
+Shipped alongside: **Repeat button** on playlist sessions in the
+full-screen view (cycles off → context → track, pushed to Spotify via
+`setRepeat`). Sits opposite the existing Shuffle button, mirroring
+Spotify's mobile transport layout.
+
+### "Tap a new seed mid-session does nothing" — fixed (from feedback)
+**Root cause** found via stdout logs once we knew to look there: the
+client was sending `{ type: "track", trackId }` and `{ type: "artist",
+artistId }` from `HomeTab`'s `startTrackSession` / `startArtistSession`
+handlers, but the server's seedKey contract requires `spotifyUri`. The
+server threw `seedKey: track seed requires spotifyUri` and returned 500
+six times in a row — invisible in App Insights `exceptions` because the
+route caught the error and returned 500 via `res.status`. Fixed by
+sending `{ type: "track", spotifyUri: track.uri }` /
+`{ type: "artist", spotifyUri: artist.uri }` from
+[client/Components/tabs/HomeTab.jsx](client/Components/tabs/HomeTab.jsx),
+and added `trackException` to the catch in
+[client/Components/player/useStartSession.js](client/Components/player/useStartSession.js)
+so the next silent server-side failure surfaces as a client exception
+with the seedType attached.
+
+Follow-up worth doing: pipe server-side `logger.error(...,
+'sessions.start.failed')` to `trackException` too — Pino's stdout
+isn't picked up by App Insights' exception channel, so 500s with a
+caught error inside the route handler don't show up in
+`exceptions | where …`. Either bridge Pino-error → trackException, or
+add an explicit `trackException(err, { route, ...})` next to every
+`logger.error` in sessions/content routes.
+
+**Update (June 2026):** the follow-up is done.
+[server/services/logger.js](server/services/logger.js) now has a Pino
+hook that auto-forwards every `error`/`fatal` log line to
+`trackException`, mapping all caller-supplied object fields onto
+`customDimensions`. Every route catch that previously did
+`console.error(...)` has also been migrated to `logger.error(...)`
+(content, spotify, sessions, stations, profile, ensureFreshAccessToken
+plus the service-layer calls in createContent, currentWeather,
+generateStationTracks, geminiToSpotifyTracks, pickDjWithLlm, news,
+transit, musicFacts, rundown, convertMP3FileToDataURI, db/seed). Net
+result: any uncaught-and-caught exception in production now shows up
+in `exceptions | where customDimensions.source == "pino"` with the
+log name as `customDimensions.logName`.
+
 ---
 
 ## Suggested additions (not in the original brain dump)
@@ -311,17 +480,23 @@ skill (Chrome team agent skills, installed under `.agents/`). When picking
 one of these up, re-run `npx -y modern-web-guidance@latest retrieve "<id>"`
 to get the current guide — the IDs below are the ones to retrieve.
 
-### `fetchpriority="high"` on the LCP cover image — `groomed`
-[client/Components/tabs/AIStationsRow.jsx](client/Components/tabs/AIStationsRow.jsx)
-and [client/Components/tabs/GenreStationTile.jsx](client/Components/tabs/GenreStationTile.jsx)
-apply `loading="lazy"` to *every* tile, including the first row above the
-fold. Guide `optimize-image-priority` says: never lazy-load the LCP
-image, and exactly one image should get `fetchpriority="high"`.
+### `fetchpriority="high"` on the LCP cover image — shipped (June 2026)
+Shipped across all three above-the-fold tile components. Each now
+takes an optional `priority` prop that drops `loading="lazy"` and
+emits `fetchpriority="high"` on its `<img>`:
 
-Action: first AI-station tile of the top row gets `fetchpriority="high"`
-and drops `loading="lazy"`; everything else keeps `loading="lazy"` only
-(don't add `fetchpriority="low"`). Newly Available since 2024-10-29 — no
-fallback needed.
+- [HomeTab.jsx](client/Components/tabs/HomeTab.jsx)’s `PosterTile`
+  is `priority` on the first "Jump back into" tile.
+- [GenreStationTile.jsx](client/Components/tabs/GenreStationTile.jsx)
+  is `priority` on the first genre tile of the Stations row — but only
+  when there are no recent sessions above it, so the priority budget
+  always goes to whichever row actually owns the LCP slot.
+- [AIStationsRow.jsx](client/Components/tabs/AIStationsRow.jsx)’s first
+  card gets `priority` for the SearchTab genre/mood detail screens.
+
+Everything else keeps the existing `loading="lazy"` so we don't blow
+the priority budget on offscreen tiles. Newly Available since
+2024-10-29 so no fallback is needed.
 
 ### Service worker update toast → Popover API — `idea`
 [client/Components/shell/ServiceWorkerUpdateToast.jsx](client/Components/shell/ServiceWorkerUpdateToast.jsx)

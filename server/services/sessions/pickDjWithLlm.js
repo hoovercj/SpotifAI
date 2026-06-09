@@ -17,6 +17,7 @@
 
 const { GoogleGenAI } = require('@google/genai')
 const { loadPersonaMetadata } = require('../utl/loadPersonas')
+const logger = require('../logger')
 
 let aiClient
 function getClient() {
@@ -92,7 +93,7 @@ function parsePick(text, validIds) {
   try {
     parsed = JSON.parse(trimmed)
   } catch (err) {
-    console.warn('pickDjWithLlm: response not valid JSON:', trimmed.slice(0, 200))
+    logger.warn({ snippet: trimmed.slice(0, 200) }, 'pickDjWithLlm.invalid_json')
     return null
   }
   const djId = Number(parsed?.djId)

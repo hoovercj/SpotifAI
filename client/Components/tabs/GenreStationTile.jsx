@@ -27,7 +27,7 @@ import { getImageSources } from "@/lib/image"
  * for AI hosts". For mood/genre tiles without AI stations the
  * thumbnail is simply omitted, falling back to the bare gradient.
  */
-export default function GenreStationTile({ genre, size = "md", onClick }) {
+export default function GenreStationTile({ genre, size = "md", onClick, priority }) {
   const navigate = useNavigate()
   const { covers } = useStationCovers()
 
@@ -75,7 +75,12 @@ export default function GenreStationTile({ genre, size = "md", onClick }) {
           <img
             src={previewSources.jpg || previewSources.webp}
             alt=""
-            loading="lazy"
+            // Marked `priority` when this tile sits above the fold
+            // and there's nothing else above it that already claimed
+            // the LCP slot. Drops lazy + asks the browser to fetch
+            // this image at high priority.
+            loading={priority ? undefined : "lazy"}
+            fetchpriority={priority ? "high" : undefined}
             decoding="async"
             onError={(e) => {
               // Hide silently on 404 — falling back to the bare gradient

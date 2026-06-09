@@ -1,4 +1,5 @@
 const axios = require('axios')
+const logger = require('./logger')
 
 const OPEN_WEATHER_API_KEY = process.env.OPEN_WEATHER_API_KEY
 
@@ -68,7 +69,7 @@ async function getWeatherForDate(lat, lon, dateTimestamp) {
 
     return response.data
   } catch (error) {
-    console.error(`Failed to fetch weather data: ${error.message}`)
+    logger.warn({ err: error?.message, status: error?.response?.status }, 'currentWeather.openweather_failed')
     return null
   }
 }
@@ -77,7 +78,6 @@ async function createWeather() {
   const lat = 38.86003596296296
   const lon = -105.27348095555556
   const currentDateTimestamp = Math.floor(Date.now() / 1000)
-  console.log('time ', currentDateTimestamp)
   const weatherData = await getWeatherForDate(lat, lon, currentDateTimestamp)
 
   if (!weatherData) return null
@@ -144,15 +144,11 @@ function determineWindDirection(degrees) {
 }
 
 async function currenWeather() {
-  const weatherData = toImperialAndLocalTime(await createWeather())
-  console.log(weatherData)
-  const weatherDescription = describeWeather(weatherData)
-
-  if (weatherData) {
-    return weatherDescription
-  } else {
-    console.log('Failed to fetch weather data.')
-  }
+  const raw = await createWeather()
+  if (!raw) return null
+  const weatherData = toImperialAndLocalTime(raw)
+  if (!weatherData?.data?.[0]) return null
+  return describeWeather(weatherData)
 }
 module.exports = currenWeather
 // {

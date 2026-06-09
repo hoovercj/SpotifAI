@@ -11,6 +11,7 @@
  * /api/stations and /api/sessions can share one implementation.
  */
 const SpotifyWebApi = require("spotify-web-api-node")
+const logger = require("../../services/logger")
 
 const REFRESH_BUFFER_MS = 60 * 1000
 
@@ -36,7 +37,7 @@ async function ensureFreshAccessToken(req) {
     if (body.refresh_token) req.session.refreshToken = body.refresh_token
     return true
   } catch (err) {
-    console.error("Spotify token refresh failed:", err)
+    logger.error({ err: err?.message, stack: err?.stack, statusCode: err?.statusCode }, 'spotify.ensureFreshAccessToken.failed')
     return false
   }
 }

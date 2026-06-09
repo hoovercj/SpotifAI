@@ -5,6 +5,8 @@ import {
   ChevronDown,
   Pause,
   Play,
+  Repeat,
+  Repeat1,
   SkipBack,
   SkipForward,
   Volume2,
@@ -73,9 +75,23 @@ export default function NowPlayingScreen() {
   // stream fresh) and shuffling would just be noise.
   const currentSession = useSelector((s) => s.player?.currentSession)
   const canShuffle = currentSession?.seed?.type === "playlist"
+  // Repeat surfaces alongside shuffle on playlist sessions — for the
+  // open-ended seed types our queue refill already gives infinite play
+  // so a repeat toggle would be redundant.
+  const canRepeat = currentSession?.seed?.type === "playlist"
+  const repeatMode = useSelector((s) => s.player?.repeatMode ?? "off")
 
-  const { togglePlay, next, previous, seek, selectDj, shuffleCurrentSession, playDjAudio } =
-    useSpotifyPlayer()
+  const {
+    togglePlay,
+    next,
+    previous,
+    seek,
+    selectDj,
+    shuffleCurrentSession,
+    playDjAudio,
+    setRepeatModeOnSpotify,
+    endSession,
+  } = useSpotifyPlayer()
   const [showDjPicker, setShowDjPicker] = useState(false)
   // Tracks where the picker was opened FROM so Cancel/Close can take
   // the user back to that surface instead of always dumping them on
@@ -633,6 +649,56 @@ export default function NowPlayingScreen() {
                     className="grid h-12 w-12 place-items-center rounded-full text-foreground hover:bg-muted"
                   >
                     <SkipForward className="h-6 w-6" />
+                  </button>
+                  {canRepeat && (() => {
+                    // Cycle off → context → track → off, mirroring
+                    // Spotify's mobile transport. The icon swaps to
+                    // Repeat1 in 'track' mode and the button tints
+                    // fuchsia whenever the mode is non-off so users
+                    // can tell at a glance that repeat is engaged.
+                    const nextMode =
+                      repeatMode === "off"
+                        ? "context"
+                        : repeatMode === "context"
+                        ? "track"
+                        : "off"
+                    const Icon = repeatMode === "track" ? Repeat1 : Repeat
+                    const label =
+                      repeatMode === "off"
+                        ? "Repeat off"
+                        : repeatMode === "context"
+                        ? "Repeat playlist"
+                        : "Repeat track"
+                    return (
+                      <button
+                        type="button"
+                        aria-label={label}
+                        title={label}
+                        onClick={() => setRepeatModeOnSpotify(nextMode)}
+                        className={`grid h-10 w-10 place-items-center rounded-full hover:bg-muted ${
+                          repeatMode === "off"
+                            ? "text-muted-foreground hover:text-foreground"
+                            : "text-fuchsia-400"
+                        }`}
+                      >
+                        <Icon className="h-5 w-5" />
+                      </button>
+                    )
+                  })()}
+                </div>
+
+                {/* End-session escape hatch — clears the in-memory
+                    session + closes Now Playing so the user lands back
+                    on Home with an empty player. The matching
+                    `recent_session` row stays on the server so they
+                    can re-tap it from the Home rail. */}
+                <div className="flex justify-center">
+                  <button
+                    type="button"
+                    onClick={() => endSession("button")}
+                    className="text-xs font-medium uppercase tracking-wide text-muted-foreground underline-offset-4 transition-colors hover:text-foreground hover:underline"
+                  >
+                    Stop session
                   </button>
                 </div>
 

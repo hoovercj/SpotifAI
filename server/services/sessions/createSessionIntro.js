@@ -98,6 +98,7 @@ async function createSessionIntro({
       const { wavBuffer } = await synthesizeBuffer({
         text: ttsInput,
         voiceId,
+        personaSlug,
       })
       return { wavBuffer, text: scriptText }
     },

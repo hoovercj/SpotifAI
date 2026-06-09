@@ -1,5 +1,5 @@
 const conn = require('./conn')
-const { STRING, INTEGER, FLOAT } = conn.Sequelize
+const { STRING } = conn.Sequelize
 
 const Profile = conn.define('profile', {
   userEmail: {
@@ -14,18 +14,6 @@ const Profile = conn.define('profile', {
   },
   name: {
     type: STRING,
-    allowNull: true,
-  },
-  zip: {
-    type: INTEGER,
-    allowNull: true,
-  },
-  lat: {
-    type: FLOAT,
-    allowNull: true,
-  },
-  long: {
-    type: FLOAT,
     allowNull: true,
   },
 })

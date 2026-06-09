@@ -177,7 +177,7 @@ router.get('/session', async (req, res) => {
     })
     return res.json(buildUserPayload(req.session, profile))
   } catch (err) {
-    console.error('Session restore failed:', err)
+    logger.error({ err: err?.message, stack: err?.stack }, 'spotify.session_restore_failed')
     return res.status(500).json({
       error: 'session_restore_failed',
       message: 'Failed to load profile for session.',
@@ -191,7 +191,7 @@ router.post('/logout', (req, res) => {
   if (!req.session) return res.sendStatus(204)
   req.session.destroy((err) => {
     if (err) {
-      console.error('Session destroy failed:', err)
+      logger.error({ err: err?.message, stack: err?.stack }, 'spotify.session_destroy_failed')
       return res.status(500).json({
         error: 'logout_failed',
         message: 'Failed to destroy session.',
