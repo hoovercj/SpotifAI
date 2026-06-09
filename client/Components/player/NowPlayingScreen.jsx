@@ -73,12 +73,12 @@ export default function NowPlayingScreen() {
   // seeds get shuffle — for stations/moods/track/artist sessions the
   // server has already curated a meaningful order (or refill keeps the
   // stream fresh) and shuffling would just be noise.
-  const currentSession = useSelector((s) => s.player?.currentSession)
-  const canShuffle = currentSession?.seed?.type === "playlist"
+  const playbackSession = useSelector((s) => s.player?.playbackSession)
+  const canShuffle = playbackSession?.seed?.type === "playlist"
   // Repeat surfaces alongside shuffle on playlist sessions — for the
   // open-ended seed types our queue refill already gives infinite play
   // so a repeat toggle would be redundant.
-  const canRepeat = currentSession?.seed?.type === "playlist"
+  const canRepeat = playbackSession?.seed?.type === "playlist"
   const repeatMode = useSelector((s) => s.player?.repeatMode ?? "off")
 
   const {
@@ -87,7 +87,7 @@ export default function NowPlayingScreen() {
     previous,
     seek,
     selectDj,
-    shuffleCurrentSession,
+    shufflePlaybackSession,
     playDjAudio,
     setRepeatModeOnSpotify,
     endSession,
@@ -145,7 +145,7 @@ export default function NowPlayingScreen() {
   const preferencesBySeedKey = useSelector(
     (s) => s.djPreferences?.preferencesBySeedKey || {}
   )
-  const seedKey = currentSession?.id || null
+  const seedKey = playbackSession?.id || null
   const preferredDjId = seedKey ? preferencesBySeedKey[seedKey] || null : null
 
   // Lazily hydrate prefs the first time the picker is opened. Avoid
@@ -161,12 +161,12 @@ export default function NowPlayingScreen() {
   // the avatar grid to DJs whose `details.genres` overlap. Otherwise
   // show the full roster — better to over-show than to hide a fit.
   const seedGenreTags = useMemo(() => {
-    const seed = currentSession?.seed || {}
+    const seed = playbackSession?.seed || {}
     const tags = new Set()
     if (typeof seed.genreId === "string") tags.add(seed.genreId)
     if (Array.isArray(seed.genres)) seed.genres.forEach((g) => tags.add(g))
     return tags
-  }, [currentSession])
+  }, [playbackSession])
 
   const orderedDjs = useMemo(() => {
     const list = Array.isArray(allDjs) ? [...allDjs] : []
@@ -615,7 +615,7 @@ export default function NowPlayingScreen() {
                     <button
                       type="button"
                       aria-label="Shuffle playlist"
-                      onClick={() => shuffleCurrentSession()}
+                      onClick={() => shufflePlaybackSession()}
                       className="grid h-10 w-10 place-items-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
                       title="Re-shuffle this playlist"
                     >

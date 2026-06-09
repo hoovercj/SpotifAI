@@ -4,7 +4,7 @@ import { useSpotifyPlayer } from "./useSpotifyPlayer"
 import {
   setSessionLoading,
   setSessionError,
-  replaceSessionTracksIfMatch,
+  replacePlaybackTracksIfMatch,
 } from "../../store/playerSlice"
 import {
   fetchRecentSessions,
@@ -31,7 +31,7 @@ import { trackException } from "../../lib/telemetry"
  *   6. If the server flagged the cached row stale (station-only — that
  *      mechanic stays specific to weekly-cache refreshes), poll the
  *      `refreshJobId` on the side and dispatch
- *      `replaceSessionTracksIfMatch` when the fresh tracks land.
+ *      `replacePlaybackTracksIfMatch` when the fresh tracks land.
  *
  * Returned API:
  *   start(seed, { tuningOverride? })  — kick off the orchestration
@@ -185,7 +185,7 @@ export function useStartSession() {
         if (abortedRef.current) return
 
         // Hand off to the player. PlayerProvider takes care of the
-        // currentContext/currentSession bookkeeping + actual Spotify
+        // currentContext/playbackSession bookkeeping + actual Spotify
         // play() call.
         await playSession({
           id: payload.session?.id,
@@ -222,7 +222,7 @@ export function useStartSession() {
               if (abortedRef.current) return
               if (!Array.isArray(freshTracks) || freshTracks.length === 0) return
               dispatch(
-                replaceSessionTracksIfMatch({
+                replacePlaybackTracksIfMatch({
                   id: sessionId,
                   tracks: freshTracks,
                 })

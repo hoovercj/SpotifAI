@@ -3,7 +3,7 @@ import axios from 'axios'
 import { clearPersistedPlayer } from './persistPlayer'
 import { setUserSessionId } from './userSessionSlice'
 import {
-  clearCurrentSession,
+  clearPlaybackSession,
   setCurrentContext,
 } from './playerSlice'
 import { setCurrentDj } from './djsSlice'
@@ -121,7 +121,7 @@ export const logoutUser = () => async (dispatch) => {
   // Reset the persistable player slice fields BEFORE wiping localStorage,
   // otherwise the next subscriber tick would re-persist the previous
   // user's session/context/DJ on top of the empty snapshot we just wrote.
-  dispatch(clearCurrentSession())
+  dispatch(clearPlaybackSession())
   dispatch(setCurrentContext(null))
   dispatch(setCurrentDj(null))
   // Null the user session id too so the next sign-in mints a fresh

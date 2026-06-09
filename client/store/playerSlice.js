@@ -29,7 +29,7 @@ const initialState = {
   // Replaced `currentStation` from earlier — the shape is a superset so
   // station seeds still work, and other seed types (mood/track/artist/
   // playlist) populate `seed.type` accordingly.
-  currentSession: null,
+  playbackSession: null,
 
   // Tuning indicator for a session that's spinning up. Rendered by
   // NowPlayingBar in place of the regular track row from the moment the
@@ -78,7 +78,7 @@ const initialState = {
   nowPlayingPickerRequest: false,
 
   // Refresh rehydration: when the page is reloaded, the persistence
-  // layer restores currentSession + currentContext immediately, but the
+  // layer restores playbackSession + currentContext immediately, but the
   // DJ persona has to wait for djs.allDjs to load. We park the id here
   // so PlayerProvider can promote it to djs.currentDj as soon as the
   // roster arrives, then clear it.
@@ -119,10 +119,10 @@ const playerSlice = createSlice({
     setCurrentContext: (state, action) => {
       state.currentContext = action.payload
     },
-    setCurrentSession: (state, action) => {
+    setPlaybackSession: (state, action) => {
       // `queuedUris` tracks every track URI we've handed to the Spotify
       // SDK during this session (initial play + every queue refill).
-      // It's read by `replaceSessionTracksIfMatch` when a stale-cache
+      // It's read by `replacePlaybackTracksIfMatch` when a stale-cache
       // refresh (or a Phase 3 refill) swaps in a new track list — we
       // filter the incoming tracks against this set so the user never
       // hears a song play twice.
@@ -130,7 +130,7 @@ const playerSlice = createSlice({
       const initialUris = Array.isArray(payload.tracks)
         ? payload.tracks.map((t) => t?.uri).filter(Boolean)
         : []
-      state.currentSession = {
+      state.playbackSession = {
         ...payload,
         queuedUris: initialUris,
       }
@@ -138,8 +138,8 @@ const playerSlice = createSlice({
       state.sessionLoading = null
       state.sessionError = null
     },
-    clearCurrentSession: (state) => {
-      state.currentSession = null
+    clearPlaybackSession: (state) => {
+      state.playbackSession = null
     },
     // Swap in a freshly-generated track list for the currently-playing
     // session. Used by:
@@ -155,20 +155,20 @@ const playerSlice = createSlice({
     // The incoming `tracks` are filtered against `queuedUris` so any
     // song we've already handed to Spotify's SDK (currently playing OR
     // sitting in the queue ahead of us) is excluded.
-    replaceSessionTracksIfMatch: (state, action) => {
+    replacePlaybackTracksIfMatch: (state, action) => {
       const { id, tracks } = action.payload || {}
-      if (!state.currentSession) return
-      if (state.currentSession.id !== id) return
+      if (!state.playbackSession) return
+      if (state.playbackSession.id !== id) return
       if (!Array.isArray(tracks) || tracks.length === 0) return
-      const alreadyQueued = new Set(state.currentSession.queuedUris || [])
+      const alreadyQueued = new Set(state.playbackSession.queuedUris || [])
       const filtered = tracks.filter(
         (t) => t?.uri && !alreadyQueued.has(t.uri)
       )
       // If overlap eliminated everything, keep the old list rather than
       // wiping the session to nothing.
       if (filtered.length === 0) return
-      state.currentSession = {
-        ...state.currentSession,
+      state.playbackSession = {
+        ...state.playbackSession,
         tracks: filtered,
       }
     },
@@ -179,36 +179,36 @@ const playerSlice = createSlice({
     // list. Matching by id so a stale refill from an abandoned session
     // can't pollute a new one. URIs already in `queuedUris` are
     // skipped to avoid duplicates.
-    appendSessionTracksIfMatch: (state, action) => {
+    appendPlaybackTracksIfMatch: (state, action) => {
       const { id, tracks } = action.payload || {}
-      if (!state.currentSession) return
-      if (state.currentSession.id !== id) return
+      if (!state.playbackSession) return
+      if (state.playbackSession.id !== id) return
       if (!Array.isArray(tracks) || tracks.length === 0) return
-      const alreadyQueued = new Set(state.currentSession.queuedUris || [])
+      const alreadyQueued = new Set(state.playbackSession.queuedUris || [])
       const existingUris = new Set(
-        (state.currentSession.tracks || []).map((t) => t?.uri).filter(Boolean)
+        (state.playbackSession.tracks || []).map((t) => t?.uri).filter(Boolean)
       )
       const filtered = tracks.filter(
         (t) =>
           t?.uri && !alreadyQueued.has(t.uri) && !existingUris.has(t.uri)
       )
       if (filtered.length === 0) return
-      state.currentSession = {
-        ...state.currentSession,
-        tracks: [...(state.currentSession.tracks || []), ...filtered],
+      state.playbackSession = {
+        ...state.playbackSession,
+        tracks: [...(state.playbackSession.tracks || []), ...filtered],
       }
     },
     // Called by the player-side refill effect after it adds URIs to the
-    // Spotify SDK queue, so future `replaceSessionTracksIfMatch` /
-    // `appendSessionTracksIfMatch` calls know those URIs are already
+    // Spotify SDK queue, so future `replacePlaybackTracksIfMatch` /
+    // `appendPlaybackTracksIfMatch` calls know those URIs are already
     // spoken for and shouldn't be re-introduced.
-    recordSessionQueueAdditions: (state, action) => {
+    recordPlaybackQueueAdditions: (state, action) => {
       const uris = action.payload
-      if (!state.currentSession || !Array.isArray(uris)) return
-      const set = new Set(state.currentSession.queuedUris || [])
+      if (!state.playbackSession || !Array.isArray(uris)) return
+      const set = new Set(state.playbackSession.queuedUris || [])
       for (const u of uris) if (u) set.add(u)
-      state.currentSession = {
-        ...state.currentSession,
+      state.playbackSession = {
+        ...state.playbackSession,
         queuedUris: Array.from(set),
       }
     },
@@ -282,7 +282,7 @@ const playerSlice = createSlice({
     // position, isPlaying) is left to the SDK reconnect to refill.
     hydratePersisted: (state, action) => {
       const payload = action.payload || {}
-      if (payload.currentSession) state.currentSession = payload.currentSession
+      if (payload.playbackSession) state.playbackSession = payload.playbackSession
       if (payload.currentContext) state.currentContext = payload.currentContext
       if (payload.currentDjId != null) {
         state.pendingRehydrateDjId = payload.currentDjId
@@ -302,11 +302,11 @@ export const {
   setDuration,
   setDeviceId,
   setCurrentContext,
-  setCurrentSession,
-  clearCurrentSession,
-  replaceSessionTracksIfMatch,
-  appendSessionTracksIfMatch,
-  recordSessionQueueAdditions,
+  setPlaybackSession,
+  clearPlaybackSession,
+  replacePlaybackTracksIfMatch,
+  appendPlaybackTracksIfMatch,
+  recordPlaybackQueueAdditions,
   setSessionLoading,
   setSessionError,
   setCurrentDj,

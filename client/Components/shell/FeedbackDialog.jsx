@@ -24,7 +24,7 @@ export default function FeedbackDialog({ open, onOpenChange }) {
   const [error, setError] = useState(null)
 
   const currentTrack = useSelector((s) => s.player?.currentTrack)
-  const currentSession = useSelector((s) => s.player?.currentSession)
+  const playbackSession = useSelector((s) => s.player?.playbackSession)
 
   function reset() {
     setMessage("")
@@ -49,9 +49,9 @@ export default function FeedbackDialog({ open, onOpenChange }) {
         message: message.slice(0, MAX_MESSAGE_LEN),
         contactOk,
         path: typeof window !== "undefined" ? window.location.pathname : null,
-        seedKey: currentSession?.id ?? null,
-        seedType: currentSession?.seed?.type ?? null,
-        djId: currentSession?.djId ?? null,
+        seedKey: playbackSession?.id ?? null,
+        seedType: playbackSession?.seed?.type ?? null,
+        djId: playbackSession?.djId ?? null,
         trackUri: currentTrack?.uri ?? null,
       }
       await axios.post("/api/feedback", payload)

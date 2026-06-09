@@ -406,7 +406,7 @@ Two entry points landed for terminating the current session:
 Both call the new `endSession()` helper in
 [PlayerProvider.jsx](client/Components/player/PlayerProvider.jsx),
 which pauses Spotify + the DJ overlay, dispatches
-`clearCurrentSession` / `clearCurrentTrack` / `setCurrentContext(null)`,
+`clearPlaybackSession` / `clearCurrentTrack` / `setCurrentContext(null)`,
 and closes the drawer. The matching `recent_session` row stays on the
 server so the user can re-tap the seed from the Home rail.
 

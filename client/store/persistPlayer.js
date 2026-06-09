@@ -9,7 +9,7 @@
  * showing a track but "Playing from your library" and no DJ avatar.
  *
  * We persist a *minimal* snapshot:
- *   - currentSession      (seed, name, image, gradient, djId, tracks…)
+ *   - playbackSession      (seed, name, image, gradient, djId, tracks…)
  *   - currentContext      ("Playing from {name}")
  *   - currentDjId         (just the ID; the full persona is recovered
  *                          by looking it up in djs.allDjs once that
@@ -87,7 +87,7 @@ export function subscribePlayerPersistence(store) {
       state.player?.pendingRehydrateDjId ??
       null
     const snapshot = {
-      currentSession: state.player?.currentSession ?? null,
+      playbackSession: state.player?.playbackSession ?? null,
       currentContext: state.player?.currentContext ?? null,
       currentDjId,
       userSessionId: state.userSession?.id ?? null,

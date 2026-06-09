@@ -19,10 +19,10 @@ import {
   setDeviceId,
   setDjSpeaking,
   setCurrentContext,
-  setCurrentSession,
-  clearCurrentSession,
-  recordSessionQueueAdditions,
-  appendSessionTracksIfMatch,
+  setPlaybackSession,
+  clearPlaybackSession,
+  recordPlaybackQueueAdditions,
+  appendPlaybackTracksIfMatch,
   clearPendingRehydrateDjId,
   setRepeatMode,
   closeNowPlaying,
@@ -68,7 +68,7 @@ const TALK_BRIDGE_FADE_STEP_MS = 60
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
 // Fisher–Yates shuffle. Returns a new array; doesn't mutate input.
-// Used by `shuffleCurrentSession` so the playlist-shuffle button gives
+// Used by `shufflePlaybackSession` so the playlist-shuffle button gives
 // the user a genuinely random reordering on every tap.
 function shuffleArray(arr) {
   const out = arr.slice()
@@ -105,16 +105,15 @@ export function PlayerProvider({ children }) {
   // historically `s.stations.currentStation` (a field that never
   // actually existed — the selector silently returned undefined and
   // the DJ chatter payload carried empty station context). Now points
-  // to the unified `player.currentSession` slice so any seed type
+  // to the unified `player.playbackSession` slice so any seed type
   // (station / mood / track / artist / playlist) lights up the DJ.
-  const currentSession = useSelector((s) => s.player?.currentSession)
+  const playbackSession = useSelector((s) => s.player?.playbackSession)
   const userSession = useSelector((s) => s.userSession)
   const useBackendApis = useSelector((s) => s.user?.useBackendApis)
   const volume = useSelector((s) => s.player?.volume ?? DEFAULT_INITIAL_VOLUME)
   const djVolume = useSelector((s) => s.player?.djVolume ?? 1.0)
   const isMuted = useSelector((s) => s.player?.isMuted ?? false)
   const playerCurrentTrack = useSelector((s) => s.player?.currentTrack)
-  const playerCurrentSession = useSelector((s) => s.player?.currentSession)
 
   // ── Refs ───────────────────────────────────────────────────────────────
   const playerRef = useRef({ player: null })
@@ -140,7 +139,7 @@ export function PlayerProvider({ children }) {
   const spotifyApiRef = useRef(new SpotifyWebApi())
 
   // Refill / shuffle guards — both consumed by the queue-refill effect
-  // below AND reset by `shuffleCurrentSession`. Declared up here so
+  // below AND reset by `shufflePlaybackSession`. Declared up here so
   // both call sites share the same refs.
   const lastRefillAtUriRef = useRef(null)
   const refillInFlightRef = useRef(false)
@@ -149,7 +148,7 @@ export function PlayerProvider({ children }) {
   // change (we'd lose timer continuity otherwise).
   const currentDjRef = useRef(currentDj)
   const allDjsRef = useRef(allDjs)
-  const currentSessionRef = useRef(currentSession)
+  const playbackSessionRef = useRef(playbackSession)
   const userSessionRef = useRef(userSession)
   const useBackendApisRef = useRef(useBackendApis)
   const volumeRef = useRef(volume)
@@ -158,12 +157,12 @@ export function PlayerProvider({ children }) {
 
   useEffect(() => { currentDjRef.current = currentDj }, [currentDj])
   useEffect(() => { allDjsRef.current = allDjs }, [allDjs])
-  useEffect(() => { currentSessionRef.current = currentSession }, [currentSession])
+  useEffect(() => { playbackSessionRef.current = playbackSession }, [playbackSession])
   useEffect(() => { userSessionRef.current = userSession }, [userSession])
   useEffect(() => { useBackendApisRef.current = useBackendApis }, [useBackendApis])
 
   // After a page refresh the player slice was hydrated from
-  // localStorage (currentSession + currentContext), but djs.currentDj
+  // localStorage (playbackSession + currentContext), but djs.currentDj
   // can't be restored synchronously because the DJ roster carries
   // ~MB of base64 portrait data we deliberately don't persist. The
   // moment fetchDjs lands the roster we look up the parked id and
@@ -275,7 +274,7 @@ export function PlayerProvider({ children }) {
     if (!duration || !audioRef.current?.duration) return
 
     const audioDurationMs = audioRef.current.duration * 1000
-    const seedTypeForEvent = currentSessionRef.current?.seed?.type ?? null
+    const seedTypeForEvent = playbackSessionRef.current?.seed?.type ?? null
     let djTimeOut
     if (audioDurationMs > TALK_BRIDGE_THRESHOLD_MS) {
       // Talk-bridge: DJ overlaps last OUTRO_MS of song A, then talks
@@ -300,7 +299,7 @@ export function PlayerProvider({ children }) {
       djId: currentDjRef.current?.id ?? null,
       personaSlug: currentDjRef.current?.details?.slug ?? null,
       seedType: seedTypeForEvent,
-      seedKey: currentSessionRef.current?.id ?? null,
+      seedKey: playbackSessionRef.current?.id ?? null,
     })
 
     djAudioTimeoutRef.current = window.setTimeout(() => {
@@ -339,9 +338,9 @@ export function PlayerProvider({ children }) {
             // station-only era. Once the backend route is generalized
             // to accept a richer session descriptor, drop the `station:`
             // wrapper.
-            name: currentSessionRef.current?.name,
-            description: currentSessionRef.current?.seed?.type ?? null,
-            uri: currentSessionRef.current?.id ?? null,
+            name: playbackSessionRef.current?.name,
+            description: playbackSessionRef.current?.seed?.type ?? null,
+            uri: playbackSessionRef.current?.id ?? null,
           },
           curTrack: {
             uri: trackState.current_track.uri,
@@ -366,7 +365,7 @@ export function PlayerProvider({ children }) {
             trackException(err, {
               source: "next-content",
               djId: currentDjRef.current?.id ?? null,
-              seedKey: currentSessionRef.current?.id ?? null,
+              seedKey: playbackSessionRef.current?.id ?? null,
               status: err?.response?.status ?? null,
             })
           }
@@ -532,7 +531,7 @@ export function PlayerProvider({ children }) {
       track("dj.break.completed", {
         mode: wasBridge ? "bridge" : "duck",
         djId: currentDjRef.current?.id ?? null,
-        seedType: currentSessionRef.current?.seed?.type ?? null,
+        seedType: playbackSessionRef.current?.seed?.type ?? null,
       })
       prepareNextDjAudio()
     }
@@ -576,7 +575,7 @@ export function PlayerProvider({ children }) {
       trackDelaySetRef.current = false
       audioRef.current?.pause()
       dispatch(setDjSpeaking(false))
-      dispatch(clearCurrentSession())
+      dispatch(clearPlaybackSession())
       dispatch(setCurrentContext({
         type: "track",
         uri: uris[0],
@@ -610,7 +609,7 @@ export function PlayerProvider({ children }) {
       trackDelaySetRef.current = false
       audioRef.current?.pause()
       dispatch(setDjSpeaking(false))
-      dispatch(clearCurrentSession())
+      dispatch(clearPlaybackSession())
       dispatch(setCurrentContext({
         type: context.type ?? guessContextType(context.uri),
         uri: context.uri,
@@ -700,7 +699,7 @@ export function PlayerProvider({ children }) {
         name: session.name ?? null,
         image: session.image ?? session.tracks[0]?.image ?? null,
       }))
-      dispatch(setCurrentSession({
+      dispatch(setPlaybackSession({
         id: session.id,
         seed: session.seed,
         name: session.name,
@@ -733,7 +732,7 @@ export function PlayerProvider({ children }) {
    * Shuffle the current session's tracks and restart playback from the
    * top of the shuffled list. Intended for playlist seeds (where the
    * server returns tracks in playlist order) but seed-agnostic — it
-   * only requires that `currentSession.tracks` be populated.
+   * only requires that `playbackSession.tracks` be populated.
    *
    * Each call is a fresh shuffle, so repeated taps re-shuffle (rather
    * than toggle Spotify's shuffle flag). This is simpler and matches
@@ -743,15 +742,15 @@ export function PlayerProvider({ children }) {
    * We reset `queuedUris` because the new order means previously-queued
    * URIs may need to be re-queued by the refill effect at the new tail.
    */
-  const shuffleCurrentSession = useCallback(async () => {
-    const session = currentSessionRef.current
+  const shufflePlaybackSession = useCallback(async () => {
+    const session = playbackSessionRef.current
     if (!session?.tracks?.length) return
     if (!ensureToken()) return
     const shuffled = shuffleArray(session.tracks)
     const uris = shuffled.map((t) => t.uri).filter(Boolean)
     if (!uris.length) return
 
-    dispatch(setCurrentSession({
+    dispatch(setPlaybackSession({
       ...session,
       tracks: shuffled,
       queuedUris: uris,
@@ -763,8 +762,8 @@ export function PlayerProvider({ children }) {
     try {
       await spotifyApiRef.current.play({ uris })
     } catch (err) {
-      console.warn("shuffleCurrentSession failed:", err)
-      trackException(err, { source: "shuffleCurrentSession", seedKey: session.id })
+      console.warn("shufflePlaybackSession failed:", err)
+      trackException(err, { source: "shufflePlaybackSession", seedKey: session.id })
     }
   }, [ensureToken, dispatch])
 
@@ -779,7 +778,7 @@ export function PlayerProvider({ children }) {
   //     user expectations for those seed types.
   //
   //   - mood, track, artist  → REFILL: POST /api/sessions/refill and
-  //     append the fresh tracks via `appendSessionTracksIfMatch`. These
+  //     append the fresh tracks via `appendPlaybackTracksIfMatch`. These
   //     seed types are open-ended ("more like this"), so re-playing the
   //     same 20 tracks would feel like an actively bad bug. The server
   //     coalesces concurrent refills per seed and excludes the URIs the
@@ -789,9 +788,9 @@ export function PlayerProvider({ children }) {
   // sits on the same track across multiple state updates. The
   // `refillInFlightRef` flag prevents a second concurrent refill if
   // the threshold crosses again before the first one finishes. Both
-  // are declared earlier so `shuffleCurrentSession` can reset them.
+  // are declared earlier so `shufflePlaybackSession` can reset them.
   useEffect(() => {
-    const session = playerCurrentSession
+    const session = playbackSession
     const trackUri = playerCurrentTrack?.uri
     if (!session?.tracks?.length || !trackUri) return
     const uris = session.tracks.map((t) => t.uri).filter(Boolean)
@@ -828,7 +827,7 @@ export function PlayerProvider({ children }) {
           }
         }
         if (successfullyQueued.length > 0) {
-          dispatch(recordSessionQueueAdditions(successfullyQueued))
+          dispatch(recordPlaybackQueueAdditions(successfullyQueued))
         }
       })()
       return
@@ -886,9 +885,9 @@ export function PlayerProvider({ children }) {
           await sleep(POLL_MS)
 
           // If the session changed under us mid-poll (user tapped
-          // something else), drop the result — `appendSessionTracksIfMatch`
+          // something else), drop the result — `appendPlaybackTracksIfMatch`
           // would no-op anyway but we may as well stop polling.
-          const liveId = currentSessionRef.current?.id
+          const liveId = playbackSessionRef.current?.id
           if (!liveId || liveId !== session.id) return
 
           const statusRes = await fetch(`/api/sessions/jobs/${jobId}`, {
@@ -915,7 +914,7 @@ export function PlayerProvider({ children }) {
         // Append to Redux (filters dupes for us) AND push onto the
         // Spotify SDK queue so the next track actually plays.
         dispatch(
-          appendSessionTracksIfMatch({
+          appendPlaybackTracksIfMatch({
             id: session.id,
             tracks: freshTracks,
           })
@@ -933,7 +932,7 @@ export function PlayerProvider({ children }) {
           }
         }
         if (queued.length > 0) {
-          dispatch(recordSessionQueueAdditions(queued))
+          dispatch(recordPlaybackQueueAdditions(queued))
         }
       } catch (err) {
         console.warn("session refill failed:", err)
@@ -946,11 +945,11 @@ export function PlayerProvider({ children }) {
         refillInFlightRef.current = false
       }
     })()
-  }, [playerCurrentTrack?.uri, playerCurrentSession])
+  }, [playerCurrentTrack?.uri, playbackSession])
 
   // Clear the session context the moment another playback action takes
   // over — handled inline by `playTracks` / `playContext` dispatching
-  // `clearCurrentSession` so the refill effect stops firing.
+  // `clearPlaybackSession` so the refill effect stops firing.
 
   const togglePlay = useCallback(() => playerRef.current?.player?.togglePlay(), [])
   const resume = useCallback(() => playerRef.current?.player?.resume(), [])
@@ -995,8 +994,8 @@ export function PlayerProvider({ children }) {
     dispatch(setRepeatMode(mode))
     track("player.repeat.changed", {
       mode,
-      seedType: currentSessionRef.current?.seed?.type ?? null,
-      seedKey: currentSessionRef.current?.id ?? null,
+      seedType: playbackSessionRef.current?.seed?.type ?? null,
+      seedKey: playbackSessionRef.current?.id ?? null,
     })
     try {
       await spotifyApiRef.current?.setRepeat(mode)
@@ -1014,7 +1013,7 @@ export function PlayerProvider({ children }) {
   // `reason` flows through to telemetry so we can see which surface
   // (swipe / button / future) is driving end-session adoption.
   const endSession = useCallback((reason = "unknown") => {
-    const session = currentSessionRef.current
+    const session = playbackSessionRef.current
     track("session.ended", {
       reason,
       seedType: session?.seed?.type ?? null,
@@ -1023,7 +1022,7 @@ export function PlayerProvider({ children }) {
     })
     stopCurrentPlayback()
     dispatch(closeNowPlaying())
-    dispatch(clearCurrentSession())
+    dispatch(clearPlaybackSession())
     dispatch(setCurrentContext(null))
     dispatch(clearCurrentTrack())
   }, [dispatch, stopCurrentPlayback])
@@ -1139,7 +1138,7 @@ export function PlayerProvider({ children }) {
         artist: Array.isArray(playerCurrentTrack.artists)
           ? playerCurrentTrack.artists.map((a) => a.name).join(", ")
           : "",
-        album: playerCurrentSession?.name || "",
+        album: playbackSession?.name || "",
         artwork: artworkUrl
           ? [
               { src: artworkUrl, sizes: "96x96", type: "image/jpeg" },
@@ -1151,7 +1150,7 @@ export function PlayerProvider({ children }) {
       })
       navigator.mediaSession.playbackState = isPlayingForMS ? "playing" : "paused"
     } catch (_) { /* noop on older Safari */ }
-  }, [playerCurrentTrack, playerCurrentSession?.name, isPlayingForMS])
+  }, [playerCurrentTrack, playbackSession?.name, isPlayingForMS])
 
   useEffect(() => {
     if (typeof navigator === "undefined" || !navigator.mediaSession) return
@@ -1224,7 +1223,7 @@ export function PlayerProvider({ children }) {
       playTracks,
       playContext,
       playSession,
-      shuffleCurrentSession,
+      shufflePlaybackSession,
       addToQueue,
       togglePlay,
       resume,
@@ -1242,7 +1241,7 @@ export function PlayerProvider({ children }) {
       playTracks,
       playContext,
       playSession,
-      shuffleCurrentSession,
+      shufflePlaybackSession,
       addToQueue,
       togglePlay,
       resume,
