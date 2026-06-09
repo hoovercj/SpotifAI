@@ -1,6 +1,6 @@
 import { configureStore } from "@reduxjs/toolkit"
 import { createLogger } from "redux-logger"
-import jamSessionReducer from "./jamSessionSlice"
+import userSessionReducer, { setUserSessionId } from "./userSessionSlice"
 import playerReducer, { hydratePersisted } from "./playerSlice"
 import userReducer from "./userSlice"
 import spotifyPlaylistsReducer from "./spotifyPlaylistsSlice"
@@ -22,7 +22,7 @@ const loggerMiddleware = createLogger({
 const store = configureStore({
   reducer: {
     user: userReducer,
-    jamSession: jamSessionReducer,
+    userSession: userSessionReducer,
     player: playerReducer,
     spotifyPlaylists: spotifyPlaylistsReducer,
     djs: djsReducer,
@@ -43,6 +43,13 @@ const store = configureStore({
 const persistedPlayer = loadPersistedPlayer()
 if (persistedPlayer) {
   store.dispatch(hydratePersisted(persistedPlayer))
+  // userSessionId rides in the same snapshot so the server-side
+  // per-DJ chat history stays continuous across page reloads.
+  // useAuth's seed-if-missing effect would otherwise mint a new id
+  // and orphan the previous conversation.
+  if (persistedPlayer.userSessionId) {
+    store.dispatch(setUserSessionId(persistedPlayer.userSessionId))
+  }
 }
 subscribePlayerPersistence(store)
 

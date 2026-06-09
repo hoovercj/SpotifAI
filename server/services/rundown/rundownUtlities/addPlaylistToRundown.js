@@ -8,7 +8,7 @@ const {
 } = require("./rundownIndex");
 const sessionFlag = require("../../utl/globalVariableModule");
 
-async function addPlaylistToRundown(userEmail, jamSessionId) {
+async function addPlaylistToRundown(userEmail, userSessionId) {
   let tempSongName;
   let tempBandName;
   let songsPopulated = 0;
@@ -70,7 +70,7 @@ async function addPlaylistToRundown(userEmail, jamSessionId) {
   // checks session flag to determine if this is the first time through. If so, saves the first song to the database.
   if (currentRundownIndex === 0 && sessionFlag.get()) {
     await saveToDb(
-      jamSessionId,
+      userSessionId,
       currentRundownIndex,
       curTrackURI,
       show.rundown[currentRundownIndex].songName,

@@ -1,6 +1,7 @@
 import { createSlice } from '@reduxjs/toolkit'
 import axios from 'axios'
 import { clearPersistedPlayer } from './persistPlayer'
+import { setUserSessionId } from './userSessionSlice'
 import {
   clearCurrentSession,
   setCurrentContext,
@@ -123,6 +124,11 @@ export const logoutUser = () => async (dispatch) => {
   dispatch(clearCurrentSession())
   dispatch(setCurrentContext(null))
   dispatch(setCurrentDj(null))
+  // Null the user session id too so the next sign-in mints a fresh
+  // one. Passing null explicitly because the slice's payloadless call
+  // would generate a new nanoid here, which would be wasteful and
+  // briefly tracked in App Insights against the logged-out tab.
+  dispatch(setUserSessionId(null))
   clearPersistedPlayer()
   clearAuthUser()
   dispatch(clearUser())

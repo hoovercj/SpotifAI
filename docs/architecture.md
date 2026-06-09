@@ -64,7 +64,7 @@ server/
       loadPersonas.js   Reads personas/*.md → roster with image URL paths
   db/
     conn.js, index.js   Sequelize associations
-    User, Profile, Settings, JamSession, JamSessionTracks, Tracks,
+    User, Profile, Settings, UserSession, UserSessionTracks, Tracks,
     AIStation, RecentSession, UserDjPreference, UserIntroPlayed, SeenArticle
 
 infra/                  Bicep (azd up)
@@ -99,7 +99,7 @@ For mood/track/artist seeds, tracks generate asynchronously — client polls `/a
 
 ### 3. Per-track DJ chatter
 
-The Spotify SDK fires `track_update` → `PlayerProvider.prepareNextDjAudio` posts to `/api/content/next-content` with current + next track + jamSession + djId → `showRunner` decides whether the next slot is weather / news / music-fact / song-intro and emits a WAV (still writes to `runtime/audio/` locally — has not yet been migrated to blob). The audio plays through `PlayerProvider`'s overlay `<audio>` which ducks Spotify volume during DJ speech.
+The Spotify SDK fires `track_update` → `PlayerProvider.prepareNextDjAudio` posts to `/api/content/next-content` with current + next track + userSession + djId → `showRunner` decides whether the next slot is weather / news / music-fact / song-intro and emits a WAV (still writes to `runtime/audio/` locally — has not yet been migrated to blob). The audio plays through `PlayerProvider`'s overlay `<audio>` which ducks Spotify volume during DJ speech.
 
 ### 4. Telemetry
 

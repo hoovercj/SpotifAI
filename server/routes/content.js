@@ -1,6 +1,6 @@
 const router = require('express').Router()
 const Tracks = require('../db/Tracks')
-const JamSession = require('../db/JamSession')
+const UserSession = require('../db/UserSession')
 const { User, Profile, Settings, UserDjPreference } = require('../db/index.js')
 const { djCharacters } = require('../services/djCharacters')
 const { showRunner } = require('../services/rundown/showRunner')
@@ -16,12 +16,12 @@ const logger = require('../services/logger')
 const { trackEvent, trackException } = require('../services/telemetry')
 const { ipGeo } = require('../services/ipGeo')
 
-// Per-(jamSession, dj) chat sessions. Keyed so each DJ keeps an independent
+// Per-(UserSession, dj) chat sessions. Keyed so each DJ keeps an independent
 // conversation history within a single listening session, and multiple
 // concurrent jam sessions don't collide.
 const chatSessions = new Map()
-async function getOrCreateChat(jamSessionId, djId) {
-  const key = `${jamSessionId}::${djId}`
+async function getOrCreateChat(UserSessionId, djId) {
+  const key = `${UserSessionId}::${djId}`
   if (!chatSessions.has(key)) {
     const persona = await djCharacters(djId)
     const systemInstruction = buildDJSystemPrompt(persona)
@@ -36,7 +36,7 @@ async function getOrCreateChat(jamSessionId, djId) {
 router.post('/next-content', async (req, res) => {
   const t0 = Date.now()
   try {
-    const { curTrack, nextTrack, jamSessionId, djId, station } = req.body
+    const { curTrack, nextTrack, UserSessionId, djId, station } = req.body
 
     // Hard requirement — every downstream call depends on knowing who the
     // listener is and which DJ to voice. Bail with a clear 400 instead of
@@ -48,14 +48,14 @@ router.post('/next-content', async (req, res) => {
     if (!djId) {
       return res.status(400).json({ error: 'dj_id_required' })
     }
-    // JamSession's primary key is non-nullable. The client should always be
-    // sending one (jamSessionSlice seeds an id on login + session restore),
+    // UserSession's primary key is non-nullable. The client should always be
+    // sending one (UserSessionSlice seeds an id on login + session restore),
     // but defend so a null payload doesn't put the route back into a 500.
-    if (!jamSessionId) {
-      return res.status(400).json({ error: 'jam_session_id_required' })
+    if (!UserSessionId) {
+      return res.status(400).json({ error: 'user_session_id_required' })
     }
 
-    const chat = await getOrCreateChat(jamSessionId, djId)
+    const chat = await getOrCreateChat(UserSessionId, djId)
     // Resolve the persona once so the chatter event can carry slug +
     // voice. Independent of getOrCreateChat's internal lookup — the
     // overhead is a single cached file read.
@@ -79,18 +79,18 @@ router.post('/next-content', async (req, res) => {
     const geo = await ipGeo(req.ip)
     user.location = geo
 
-    let jamSession = await JamSession.findOne({
-      where: { jamSessionId, userEmail },
+    let UserSession = await UserSession.findOne({
+      where: { UserSessionId, userEmail },
     })
-    if (!jamSession) {
-      jamSession = await JamSession.create({ userEmail, jamSessionId })
+    if (!UserSession) {
+      UserSession = await UserSession.create({ userEmail, UserSessionId })
     }
 
     await Tracks.upsert({ userEmail, curTrack, nextTrack })
 
     const content = await showRunner(
       userEmail,
-      jamSessionId,
+      UserSessionId,
       user,
       djId,
       station,
@@ -100,7 +100,7 @@ router.post('/next-content', async (req, res) => {
       djId,
       personaSlug: persona?.slug || null,
       voiceId: persona?.details?.voiceID || null,
-      jamSessionId,
+      UserSessionId,
       seedKey: station?.uri || null,
       seedType: station?.description || null,
       curTrackUri: curTrack?.uri || null,
@@ -274,7 +274,7 @@ router.delete('/dj-preference/:seedKey', async (req, res) => {
 //   POST /info-request
 //     body: {
 //       kind:          'news' | 'weather' | 'music-info',
-//       jamSessionId:  string,
+//       UserSessionId:  string,
 //       djId:          number,
 //       currentTrack:  { name, artist }    // what's playing right now
 //     }
@@ -284,7 +284,7 @@ router.delete('/dj-preference/:seedKey', async (req, res) => {
 //        4xx { error }                        on validation / missing data
 //
 // This is distinct from the rundown's scheduled DJ chatter — the
-// segment is NOT added to JamSessionTracks, so it leaves the show
+// segment is NOT added to UserSessionTracks, so it leaves the show
 // running untouched. The DJ talks over the current track via the
 // HTMLAudio overlay, ducking Spotify just like a scheduled break.
 // ---------------------------------------------------------------------
@@ -295,12 +295,12 @@ router.post('/info-request', async (req, res) => {
     const email = requireEmail(req, res)
     if (!email) return
 
-    const { kind, jamSessionId, djId: rawDjId, currentTrack } = req.body || {}
+    const { kind, UserSessionId, djId: rawDjId, currentTrack } = req.body || {}
     if (!VALID_INFO_KINDS.has(kind)) {
       return res.status(400).json({ error: 'invalid_kind' })
     }
-    if (!jamSessionId) {
-      return res.status(400).json({ error: 'jam_session_id_required' })
+    if (!UserSessionId) {
+      return res.status(400).json({ error: 'user_session_id_required' })
     }
     const djId = parseDjId(rawDjId)
     if (djId === undefined) {
@@ -322,7 +322,7 @@ router.post('/info-request', async (req, res) => {
     }
 
     const name = user.profile?.name || user.display_name || 'there'
-    const chat = await getOrCreateChat(jamSessionId, djId)
+    const chat = await getOrCreateChat(UserSessionId, djId)
 
     let prompt = null
     if (kind === 'weather') {

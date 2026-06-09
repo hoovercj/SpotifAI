@@ -47,7 +47,7 @@ export default function DjActionBar({ onClose }) {
   const { playDjAudio } = useSpotifyPlayer()
   const dj = useSelector((s) => s.djs?.currentDj)
   const djSpeaking = useSelector((s) => s.player?.djSpeaking)
-  const jamSessionId = useSelector((s) => s.jamSession?.id)
+  const userSessionId = useSelector((s) => s.userSession?.id)
   const currentTrack = useSelector((s) => s.player?.currentTrack)
 
   const [requestingKind, setRequestingKind] = useState(null)
@@ -62,7 +62,7 @@ export default function DjActionBar({ onClose }) {
       }
     : null
   const canRequest =
-    !!dj?.id && !!jamSessionId && !!trackForRequest?.name && !!trackForRequest?.artist
+    !!dj?.id && !!userSessionId && !!trackForRequest?.name && !!trackForRequest?.artist
 
   async function handleAction(kind) {
     if (!canRequest || requestingKind) return
@@ -71,7 +71,7 @@ export default function DjActionBar({ onClose }) {
     try {
       const resp = await axios.post("/api/content/info-request", {
         kind,
-        jamSessionId,
+        userSessionId,
         djId: dj.id,
         currentTrack: trackForRequest,
       })

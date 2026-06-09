@@ -122,7 +122,7 @@ state.
   `voiceId` and `model`).
 - New `content.next-content` custom event from
   [server/routes/content.js](server/routes/content.js) carries `djId`,
-  `personaSlug`, `voiceId`, `jamSessionId`, `seedKey`, `seedType`,
+  `personaSlug`, `voiceId`, `userSessionId`, `seedKey`, `seedType`,
   `curTrackUri`, `ms` so we can join any reported segment back to the
   exact persona + voice used.
 - `intro.cache.hit` / `intro.cache.miss` / `intro.generated` already

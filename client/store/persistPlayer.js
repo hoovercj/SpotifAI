@@ -16,6 +16,9 @@
  *                          slice is loaded — persona objects carry
  *                          ~500KB base64 image data we should not be
  *                          stuffing into localStorage)
+ *   - userSessionId       (so the server-side per-DJ chat history
+ *                          stays continuous across page reloads — same
+ *                          id, same chat-key, same conversation)
  *
  * We deliberately do NOT persist `currentTrack`, `positionMs`, or
  * `isPlaying`: those reflect the SDK's live state and would be stale
@@ -87,6 +90,7 @@ export function subscribePlayerPersistence(store) {
       currentSession: state.player?.currentSession ?? null,
       currentContext: state.player?.currentContext ?? null,
       currentDjId,
+      userSessionId: state.userSession?.id ?? null,
     }
     const json = JSON.stringify(snapshot)
     if (json === lastJson) return

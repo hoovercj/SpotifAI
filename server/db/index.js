@@ -3,8 +3,8 @@ const User = require("./User")
 const syncAndSeed = require("./seed")
 const Profile = require("./Profile")
 const Settings = require("./Settings")
-const JamSession = require("./JamSession")
-const JamSessionTracks = require("./JamSessionTracks")
+const UserSession = require("./UserSession")
+const UserSessionTracks = require("./UserSessionTracks")
 const Tracks = require("./Tracks")
 const SeenArticle = require("./SeenArticle")
 const AIStation = require("./AIStation")
@@ -34,20 +34,20 @@ Settings.belongsTo(User, {
   targetKey: "email",
 })
 
-User.hasMany(JamSession, {
+User.hasMany(UserSession, {
   foreignKey: "userEmail",
 })
 
-JamSession.belongsTo(User, {
+UserSession.belongsTo(User, {
   foreignKey: "userEmail",
 })
 
-JamSession.hasMany(JamSessionTracks, {
-  foreignKey: "jamSessionId",
+UserSession.hasMany(UserSessionTracks, {
+  foreignKey: "userSessionId",
 })
 
-JamSessionTracks.belongsTo(JamSession, {
-  foreignKey: "jamSessionId",
+UserSessionTracks.belongsTo(UserSession, {
+  foreignKey: "userSessionId",
 })
 
 User.hasMany(RecentSession, {
@@ -75,7 +75,7 @@ UserDjPreference.belongsTo(User, {
 module.exports = {
   syncAndSeed,
   User,
-  JamSession,
+  UserSession,
   Profile,
   Settings,
   SeenArticle,

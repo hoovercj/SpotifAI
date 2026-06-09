@@ -108,7 +108,7 @@ export function PlayerProvider({ children }) {
   // to the unified `player.currentSession` slice so any seed type
   // (station / mood / track / artist / playlist) lights up the DJ.
   const currentSession = useSelector((s) => s.player?.currentSession)
-  const jamSession = useSelector((s) => s.jamSession)
+  const userSession = useSelector((s) => s.userSession)
   const useBackendApis = useSelector((s) => s.user?.useBackendApis)
   const volume = useSelector((s) => s.player?.volume ?? DEFAULT_INITIAL_VOLUME)
   const djVolume = useSelector((s) => s.player?.djVolume ?? 1.0)
@@ -150,7 +150,7 @@ export function PlayerProvider({ children }) {
   const currentDjRef = useRef(currentDj)
   const allDjsRef = useRef(allDjs)
   const currentSessionRef = useRef(currentSession)
-  const jamSessionRef = useRef(jamSession)
+  const userSessionRef = useRef(userSession)
   const useBackendApisRef = useRef(useBackendApis)
   const volumeRef = useRef(volume)
   const djVolumeRef = useRef(djVolume)
@@ -159,7 +159,7 @@ export function PlayerProvider({ children }) {
   useEffect(() => { currentDjRef.current = currentDj }, [currentDj])
   useEffect(() => { allDjsRef.current = allDjs }, [allDjs])
   useEffect(() => { currentSessionRef.current = currentSession }, [currentSession])
-  useEffect(() => { jamSessionRef.current = jamSession }, [jamSession])
+  useEffect(() => { userSessionRef.current = userSession }, [userSession])
   useEffect(() => { useBackendApisRef.current = useBackendApis }, [useBackendApis])
 
   // After a page refresh the player slice was hydrated from
@@ -329,7 +329,7 @@ export function PlayerProvider({ children }) {
         }
 
         const payload = {
-          jamSessionId: jamSessionRef.current?.id,
+          userSessionId: userSessionRef.current?.id,
           djName: currentDjRef.current?.djName,
           djId: currentDjRef.current?.id,
           station: {

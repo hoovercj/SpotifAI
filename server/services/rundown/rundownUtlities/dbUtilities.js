@@ -1,8 +1,8 @@
-const JamSessionTracks = require("../../../db/JamSessionTracks");
+const UserSessionTracks = require("../../../db/UserSessionTracks");
 const logger = require("../../logger");
 
 async function saveToDb(
-  jamSessionId,
+  userSessionId,
   currentRundownIndex,
   uri,
   name,
@@ -11,8 +11,8 @@ async function saveToDb(
   transcript
 ) {
   try {
-    await JamSessionTracks.create({
-      jamSessionId: jamSessionId,
+    await UserSessionTracks.create({
+      userSessionId: userSessionId,
       runDownIndex: currentRundownIndex,
       spotifyTrackId: uri,
       spotifyTrackName: name,
