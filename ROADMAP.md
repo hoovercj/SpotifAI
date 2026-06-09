@@ -99,7 +99,108 @@ chatter audit* (for the scheduler shape).
 
 ## User Input & Control
 
-### Voice + text user input — `idea`
+### Personal DJ + conversational input — `idea` (high priority)
+A persistent "Personal DJ" entry point that pairs a hand-picked DJ
+with a chat surface (text + voice) where the user can request music
+in natural language. Modeled after Spotify's "DJ" tile + chat panel,
+adapted for our persona roster.
+
+**Surfaces**
+
+- **Home tile.** Persistent full-width tile pinned at the top of
+  [client/Components/tabs/HomeTab.jsx](client/Components/tabs/HomeTab.jsx),
+  above "Jump back in". Shows the user's personal DJ avatar (or a
+  generated tile image) + a CTA like "Your personal DJ".
+- **Chat panel.** Opens from the tile OR from a "Talk to your DJ"
+  button reachable from any session (NowPlayingScreen, NowPlayingBar).
+  Includes:
+  - A "Let the DJ pick" primary button.
+  - A short list of **context-aware suggested prompts** (see below).
+  - A text input + push-to-talk voice button.
+
+**Context-aware suggestions.** The prompt set is generated per-session
+from the current seed + the user's Spotify-derived signals (top
+artists, top genres, recently played) + local time of day:
+
+| Current context | Example suggestions |
+|---|---|
+| No seed (cold home) | "Late-night country with Luke Combs", "Relaxing classical piano for winding down", "Upbeat europop I haven't heard recently" |
+| Genre station (e.g. country-current) | "More like this but slower", "Country-rock crossovers from this decade", "Storytelling country only" |
+| Artist seed (e.g. Queen Radio) | "Deeper Queen cuts I haven't heard", "Songs Queen influenced", "Stripped-down / acoustic versions" |
+| Playlist seed | "Sounds like this but newer", "If this playlist had a side B…" |
+| Mood seed (Focus / Workout) | Variations on the mood ("more lo-fi", "drop the lyrics") |
+
+**Intent classification on free-text input.** Two intent dimensions
+to extract from any user utterance:
+
+1. **Timing** — `now` vs `next` vs `queue`. "Play Bohemian Rhapsody"
+   replaces what's playing now; "Add Bohemian Rhapsody" or "After
+   this one" queues it; "Build me a Queen playlist" replaces the
+   session.
+2. **Scope** — single track vs multi-track vs session-modifier
+   ("less aggressive", "more 80s", "skip ahead").
+
+LLM classifies the utterance, then we route:
+- Single-track *now* → interrupt current playback with `playTracks([uri])`.
+- Single-track *queue* → `addToQueue(uri)` on the existing session.
+- Multi-track → spin up an **ad-hoc session** with seed
+  `{ type: "dj-request", prompt, generatedBy: djId }` and treat it
+  as any other session (recorded in `recent_session`, hosted by the
+  user's personal DJ).
+- Session-modifier → mutate the current session's seed/exclude-list
+  and trigger a refill rather than spinning up a new session.
+
+**Personal DJ assignment.**
+- **First sign-in / no DJ assigned:** server picks a DJ matching the
+  user's top genres at login time (reuse the regex+LLM logic in
+  [server/services/sessions/resolveSessionDj.js](server/services/sessions/resolveSessionDj.js)
+  with a synthetic seed `{ type: "user-profile", topGenres }`). Stash
+  the pick on the user row.
+- **User-changeable:** a settings UI lets them reassign the personal
+  DJ at any time. Reassignment is allowed mid-session — the chatter
+  voice swaps next break.
+- **Alternative (decide during grooming):** rather than pinning one
+  DJ permanently, randomly pick from the genre-matched subset at the
+  start of each "Personal DJ" session. Less continuity, more
+  freshness.
+
+**Engagement with chat is always "the DJ seed".** The chat replaces
+whatever queue is currently playing. The current seed in
+`recentSessions` isn't lost (it stays in the list, the user can tap
+back into it), but the chat creates a fresh `dj-request` session that
+takes over playback.
+
+**Open questions** (resolve during grooming):
+
+- **Voice transport.** Web Speech API (free, ok recognition), Gemini
+  Live (better with multi-turn context but costs more), or
+  push-to-talk → Gemini transcription? Probably start with Web Speech
+  + a fallback to a typed transcript.
+- **Suggested-prompt generation.** Are prompts pre-rendered from a
+  per-context template (cheap, deterministic) or LLM-generated
+  per-request (richer, but adds latency on every chat open)? Hybrid:
+  template skeletons filled with LLM-picked artist/genre slots
+  refreshed daily.
+- **Conversation continuity.** Does the chat keep state across
+  sessions ("more like that last one") or reset on every open?
+  Probably session-scoped + a "recently asked" panel.
+- **Multi-track request UX.** When the LLM expands "Build me a Queen
+  playlist" into 30 tracks, do we show the tracklist before starting,
+  or just play it? Spotify just plays — match that.
+- **Permissions.** Voice input requires a mic prompt; gate it on a
+  user gesture (the push-to-talk button) so we never trigger the
+  prompt at app load.
+- **Telemetry.** Log `dj.chat.opened`, `dj.chat.suggested.click`,
+  `dj.chat.input.submitted` (with `intent`, `scope`, `latencyMs`),
+  `dj.request.session.started`. Carries the listenSessionId from the
+  existing telemetry plumbing for free.
+
+Depends on: *Queue management* (for "splice without losing place"
+intents), *Settings page replaces "Profile"* (for the DJ reassignment
+UI). Supersedes the older *Voice + text user input* entry below — fold
+that into this when grooming.
+
+### Voice + text user input — `idea` (subsumed by *Personal DJ + conversational input*)
 User can type or speak a request:
 - "Play [song]" — single-track interrupt.
 - "Make me a playlist of [vibe]" — multi-track request.

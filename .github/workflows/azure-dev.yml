@@ -83,10 +83,11 @@ jobs:
           npm run build           # vite -> dist/
           rm -rf release release.zip
           mkdir release
-          # personas/ + prompts/ are read at request time by the API
-          # (loadPersonas, loadPrompt) via `path.resolve(__dirname, '../../..', X)`,
+          # personas/ + prompts/ + shared/ are read at request time by the
+          # API (loadPersonas, loadPrompt, shared/listenSession.mjs) via
+          # `path.resolve(__dirname, '../../..', X)` or `require('../shared/…')`,
           # so they must sit next to server/ in the deployed tree.
-          cp -R server public dist personas prompts release/
+          cp -R server public dist personas prompts shared release/
           cp package.json package-lock.json release/
           pushd release
           npm ci --omit=dev --no-audit --no-fund
